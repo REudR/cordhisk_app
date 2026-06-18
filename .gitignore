@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+
+# Database
+cordhisk.db
+
+# Local data
+memory_files/
+
+# OS
+.DS_Store
