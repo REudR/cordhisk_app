@@ -60,6 +60,97 @@ unsaved_changes = False
 # =========================
 # UTILS
 # =========================
+
+def ask_memory_full_form():
+    """Single panel for ID, title, and metadata."""
+    result = {}
+
+    win = tk.Toplevel()
+    win.title("New Memory")
+    win.grab_set()
+
+    # -------- Fields --------
+
+    fields = [
+        ("ID", "id"),
+        ("dc:title", "dc:title"),
+        ("dc:creator", "dc:creator"),
+        ("dc:date", "dc:date"),
+        ("dc:subject", "dc:subject"),
+        ("dc:description", "dc:description"),
+    ]
+
+    entries = {}
+
+    for i, (label, key) in enumerate(fields):
+        tk.Label(win, text=label, anchor="w").grid(row=i, column=0, padx=5, pady=5, sticky="w")
+
+        if key == "dc:description":
+            entry = tk.Text(win, width=30, height=4)
+        else:
+            entry = tk.Entry(win, width=40)
+
+        entry.grid(row=i, column=1, padx=5, pady=5)
+        entries[key] = entry
+
+    # -------- Buttons --------
+    def on_ok():
+        # Required fields
+        
+        mid = entries["id"].get().strip()
+        
+        if not mid:
+            messagebox.showerror("Error", "ID is required")
+            return
+        
+        if session.query(Memory).filter_by(custom_id=mid).first():
+            messagebox.showerror("Error", "Duplicate Memory ID")
+            return
+        
+        result["id"] = mid
+
+        if not mid:
+            messagebox.showerror("Error", "ID is required")
+            return
+
+        if session.query(Memory).filter_by(custom_id=mid).first():
+            messagebox.showerror("Error", "Duplicate Memory ID")
+            return
+
+        result["id"] = mid
+
+        # Metadata
+        metadata = {}
+        for key, entry in entries.items():
+            if key in ("id", "title"):
+                continue
+
+            if isinstance(entry, tk.Text):
+                value = entry.get("1.0", tk.END).strip()
+            else:
+                value = entry.get().strip()
+
+            if value:
+                metadata[key] = value
+
+        result["metadata"] = metadata
+
+        win.destroy()
+
+    def on_cancel():
+        result.clear()
+        win.destroy()
+
+    btn_frame = tk.Frame(win)
+    btn_frame.grid(row=len(fields), column=0, columnspan=2, pady=10)
+
+    tk.Button(btn_frame, text="OK", width=10, command=on_ok).pack(side="left", padx=5)
+    tk.Button(btn_frame, text="Cancel", width=10, command=on_cancel).pack(side="left", padx=5)
+
+    win.wait_window()
+
+    return result
+
 def extract_metadata(text):
     """Return list of {field, cho, value} dicts found in text."""
     return [
@@ -134,11 +225,25 @@ def show_memory_tree(mem):
 # =========================
 # GRAPH
 # =========================
-_NODE_STYLES = {               # ← colour + shape in one place, drawn by loop
+
+_NODE_STYLES = {
     "cho":    ("lightgreen", "o"),
     "memory": ("lightblue",  "s"),
     "tag":    ("orange",     "h"),
 }
+
+# ✅ NEW helper: extract dc:title from RDF
+def get_memory_title(text, fallback):
+    if not text:
+        return fallback
+
+    # works for both <dc:title> and <dc_title>
+    match = re.search(r"<dc[:_]title>(.*?)</dc[:_]title>", text)
+    if match:
+        return match.group(1)
+
+    return fallback
+
 
 def generate_graph():
     global canvas
@@ -146,11 +251,11 @@ def generate_graph():
     cho_sel = cho_list.get(tk.ACTIVE)
     mem_sel = mem_list.get(tk.ACTIVE)
 
-    if not cho_sel and not mem_sel:          # ← early exit before any work
+    if not cho_sel and not mem_sel:
         messagebox.showinfo("Info", "Select a CHO or Memory first")
         return
 
-    if canvas:                               # ← None-safe cleanup
+    if canvas:
         canvas.get_tk_widget().destroy()
         canvas = None
 
@@ -160,50 +265,97 @@ def generate_graph():
 
     if cho_sel:
         cid = cho_sel.split(" - ")[0]
+
         for m in session.query(Memory):
             for md in extract_metadata(m.text):
                 if md["cho"] != cid:
                     continue
-                mn, tn, cn = f"M:{m.custom_id}", f"T:{md['value']}", f"C:{cid}"
-                G.add_edges_from([(mn, tn), (tn, cn)])   # ← one call instead of two
+
+                mn = f"memory:{m.custom_id}"
+                tn = f"field:{md['value']}"
+                cn = f"CHO:{cid}"
+
+                G.add_edges_from([(mn, tn), (tn, cn)])
+
                 node_types.update({mn: "memory", tn: "tag", cn: "cho"})
                 node_data.update({mn: m, tn: md, cn: cid})
+
     else:
         mid = mem_sel.split(" - ")[0]
         m   = session.query(Memory).filter_by(custom_id=mid).first()
         if not m:
             return
+
         for md in extract_metadata(m.text):
-            mn, cn, tn = f"M:{m.custom_id}", f"C:{md['cho']}", f"T:{md['value']}"
+            mn = f"memory:{m.custom_id}"
+            cn = f"CHO:{md['cho']}"
+            tn = f"field:{md['value']}"
+
             G.add_edges_from([(mn, cn), (cn, tn)])
+
             node_types.update({mn: "memory", tn: "tag", cn: "cho"})
             node_data.update({mn: m, tn: md, cn: md["cho"]})
 
-    fig = plt.Figure()                       # ← figure created after selection check
+    fig = plt.Figure()
     ax  = fig.add_subplot(111)
     pos = nx.spring_layout(G)
 
-    for ntype, (color, shape) in _NODE_STYLES.items():   # ← loop replaces 3 draw calls
+    # Draw nodes
+    for ntype, (color, shape) in _NODE_STYLES.items():
         nodes = [n for n in G if node_types.get(n) == ntype]
         if nodes:
-            nx.draw_networkx_nodes(G, pos, nodes,
-                node_shape=shape, node_color=color, ax=ax)
+            nx.draw_networkx_nodes(
+                G, pos, nodes,
+                node_shape=shape,
+                node_color=color,
+                ax=ax
+            )
 
     nx.draw_networkx_edges(G, pos, ax=ax)
-    nx.draw_networkx_labels(G, pos, ax=ax)
+
+    # ✅ FIXED labels
+    labels = {}
+
+    for node in G.nodes:
+        ntype = node_types.get(node)
+        data  = node_data.get(node)
+
+        if ntype == "memory":
+            # ✅ Extract from RDF, NOT metadata tags
+            labels[node] = get_memory_title(data.text, data.custom_id)
+
+        elif ntype == "tag":
+            labels[node] = data["value"]
+
+        elif ntype == "cho":
+            cho_obj = session.query(CHO).filter_by(custom_id=data).first()
+            labels[node] = cho_obj.title if cho_obj else data
+
+    nx.draw_networkx_labels(
+        G, pos,
+        labels=labels,
+        ax=ax,
+        font_size=6,
+        font_color="black"
+    )
 
     def on_click(event):
-        if event.xdata is None or event.ydata is None:   # ← guard for out-of-axes clicks
+        if event.xdata is None or event.ydata is None:
             return
+
         for node, (x, y) in pos.items():
             if abs(event.xdata - x) < 0.05 and abs(event.ydata - y) < 0.05:
-                if node.startswith("C:"):
+
+                if node.startswith("CHO:"):
                     show_cho_tree(node_data[node])
-                elif node.startswith("M:"):
-                    show_memory_tree(node_data[node])
+
+                elif node.startswith("memory:"):
+                    load_memory_into_editor(node_data[node])
+
                 else:
                     md = node_data[node]
                     messagebox.showinfo("Tag", f"{md['field']} → {md['value']}")
+
                 break
 
     fig.canvas.mpl_connect("button_press_event", on_click)
@@ -257,6 +409,7 @@ def search():
 # =========================
 # RDF EXPORT
 # =========================
+
 def export_rdf():
     sel = cho_list.get(tk.ACTIVE)
     if not sel:
@@ -330,30 +483,57 @@ mem_list.pack(fill="both", expand=True)
 def load_memories():
     _load_list(mem_list, Memory, lambda m: f"{m.custom_id} - {m.title}")
 
+def memory_display(m):
+    mds = extract_metadata(m.text)
+    title_md = next((x["value"] for x in mds if x["field"] == "dc:title"), None)
+    return f"{m.custom_id} - {title_md if title_md else '[No title]'}"
+
+_load_list(mem_list, Memory, memory_display)
+
+
 def import_txt():
     global current_memory, unsaved_changes
+
     path = filedialog.askopenfilename()
     if not path:
         return
-    mid = simpledialog.askstring("Memory ID", "ID")
-    if not mid:
+
+    # ✅ Unified form
+    form = ask_memory_full_form()
+    if not form:
         return
-    title = simpledialog.askstring("Title", "Memory title") or "Memory"  # ← was hardcoded
-    if session.query(Memory).filter_by(custom_id=mid).first():
-        messagebox.showerror("Error", "Duplicate Memory ID")
-        return
+    
+    mid = form["id"]
+    metadata = form["metadata"]
+    
+    # fallback title ONLY for DB (optional)
+    title = metadata.get("dc:title", mid)
+
+
     new_path = os.path.join(APP_DATA_DIR, f"{mid}_{os.path.basename(path)}")
     shutil.copy(path, new_path)
-    with open(new_path, encoding="utf-8", errors="replace") as f:  # ← context manager + encoding
+
+    with open(new_path, encoding="utf-8", errors="replace") as f:
         txt = f.read()
+
+    # ✅ RDF generation
+    rdf_block = build_rdf_block(metadata)
+    txt = rdf_block + txt
+
     m = Memory(custom_id=mid, title=title, text=txt, file_path=new_path)
+
     session.add(m)
     session.commit()
+
     current_memory = m
+
     load_memories()
+
     text_box.delete("1.0", tk.END)
     text_box.insert(tk.END, txt)
+
     highlight_tags()
+
     unsaved_changes = False
     text_box.edit_modified(False)
 
@@ -373,6 +553,22 @@ def delete_memory():
 
 tk.Button(middle, text="Import Memory", command=import_txt).pack()
 tk.Button(middle, text="Delete Memory", command=delete_memory).pack()
+
+def build_rdf_block(metadata):
+    """Convert metadata dict into RDF XML string."""
+    if not metadata:
+        return ""
+
+    root = ET.Element("rdf:RDF")
+    desc = ET.SubElement(root, "rdf:Description")
+
+    for field, value in metadata.items():
+        tag = field.replace(":", "_")  # safer XML tags
+        ET.SubElement(desc, tag).text = value
+
+    rdf_string = ET.tostring(root, encoding="unicode")
+
+    return rdf_string + "\n\n"
 
 # =========================
 # EDITOR
@@ -478,10 +674,17 @@ cho_list.bind("<<ListboxSelect>>", on_cho_select)
 # =========================
 # BUTTON BAR
 # =========================
+# =========================
+# BUTTON BAR (2 ROWS)
+# =========================
 bar = tk.Frame(right)
-bar.pack()
+bar.pack(fill="x", pady=5)
 
-cho_label = tk.Label(bar, text="No CHO selected", fg="blue")
+# ---- Row 1 (editing tools) ----
+row1 = tk.Frame(bar)
+row1.pack(fill="x")
+
+cho_label = tk.Label(row1, text="No CHO selected", fg="blue")
 cho_label.pack(side="left", padx=10)
 
 metadata_fields = [
@@ -492,23 +695,22 @@ metadata_fields = [
     "dc:description"
 ]
 
-field_selector = ttk.Combobox(bar, values=metadata_fields, width=20)
+field_selector = ttk.Combobox(row1, values=metadata_fields, width=15)
 field_selector.set("dc:title")
 field_selector.pack(side="left", padx=5)
 
+tk.Button(row1, text="Save", command=save_memory).pack(side="left", padx=3)
+tk.Button(row1, text="Add Tag", command=add_tag).pack(side="left", padx=3)
+tk.Button(row1, text="Remove Tag", command=remove_tag).pack(side="left", padx=3)
 
+# ---- Row 2 (analysis tools) ----
+row2 = tk.Frame(bar)
+row2.pack(fill="x")
 
-for label, cmd in [
-    ("Save",           save_memory),
-    ("Add Tag",        add_tag),
-    ("Remove Tag",     remove_tag),
-    ("Generate Graph", generate_graph),
-    ("Compare",        compare),
-    ("Search",         search),
-    ("Export RDF",     export_rdf),
-]:
-    tk.Button(bar, text=label, command=cmd).pack(side="left")
-
+tk.Button(row2, text="Generate Graph", command=generate_graph).pack(side="left", padx=3)
+tk.Button(row2, text="Compare", command=compare).pack(side="left", padx=3)
+tk.Button(row2, text="Search", command=search).pack(side="left", padx=3)
+tk.Button(row2, text="Export RDF", command=export_rdf).pack(side="left", padx=3)
 
 # =========================
 # INIT
