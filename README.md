@@ -4,7 +4,7 @@ A semantic annotation and knowledge graph tool for Cultural Heritage Objects (CH
 
 ## Features
 
-- Create and manage CHOs
+- Create and manage Cultural Heritage Objects
 - Import and annotate memories
 - Tag text with metadata fields (dc:, dcterms:)
 - Compare metadata across memories
