@@ -12,6 +12,8 @@ A semantic annotation and knowledge graph tool for Cultural Heritage Objects (CH
 - Export RDF metadata
 - Generate interactive knowledge graphs
 
+![App Screenshot](screenshot.png)
+
 ## Installation
 
 1. Clone repository:
