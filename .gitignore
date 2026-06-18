@@ -10,3 +10,6 @@ memory_files/
 
 # OS
 .DS_Store
+
+
+.ipynb_checkpoints/
