@@ -53,45 +53,47 @@ def generate_graph(frame, state):
     # =========================
     # BUILD GRAPH
     # =========================
-    if state.current_cho:
-        cid = state.current_cho
-
-        for m in session.query(Memory):
-            for md in extract_metadata(m.text):
-                if md["cho"] != cid:
-                    continue
-
-                mn = f"memory:{m.custom_id}"
-                tn = f"tag:{md['value']}"
-                cn = f"CHO:{cid}"
-
-                G.add_edges_from([(mn, tn), (tn, cn)])
-
-                node_types[mn] = "memory"
-                node_types[tn] = "tag"
-                node_types[cn] = "cho"
-
-                node_data[mn] = m
-                node_data[tn] = md
-                node_data[cn] = cid
-
-    elif state.current_memory:
+    if state.current_memory:
+        # 🔵 Priority: memory graph
         m = state.current_memory
-
+    
         for md in extract_metadata(m.text):
             mn = f"memory:{m.custom_id}"
             cn = f"CHO:{md['cho']}"
             tn = f"tag:{md['value']}"
-
+    
             G.add_edges_from([(mn, cn), (cn, tn)])
-
+    
             node_types[mn] = "memory"
             node_types[cn] = "cho"
             node_types[tn] = "tag"
-
+    
             node_data[mn] = m
             node_data[cn] = md["cho"]
             node_data[tn] = md
+    
+    elif state.current_cho:
+        # 🟢 fallback: CHO graph
+        cid = state.current_cho
+    
+        for m in session.query(Memory):
+            for md in extract_metadata(m.text):
+                if md["cho"] != cid:
+                    continue
+    
+                mn = f"memory:{m.custom_id}"
+                tn = f"tag:{md['value']}"
+                cn = f"CHO:{cid}"
+    
+                G.add_edges_from([(mn, tn), (tn, cn)])
+    
+                node_types[mn] = "memory"
+                node_types[tn] = "tag"
+                node_types[cn] = "cho"
+    
+                node_data[mn] = m
+                node_data[tn] = md
+                node_data[cn] = cid
 
     # =========================
     # SAFETY CHECK

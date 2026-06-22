@@ -34,7 +34,10 @@ class MemoryPanel:
         if m:
             self.state.current_memory = m   # ✅ CRITICAL FIX
             self.editor.load(m)
-
+            self.state.current_memory = m
+            
+            from features.graph import generate_graph
+            generate_graph(self.state.graph_frame, self.state)
 
     def import_file(self):
         

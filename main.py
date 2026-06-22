@@ -24,17 +24,36 @@ state = AppState()
 # =========================
 # LAYOUT FRAMES
 # =========================
+# =========================
+# LEFT + MIDDLE (fixed)
+# =========================
 left = tk.Frame(root)
 left.pack(side="left", fill="y")
 
 middle = tk.Frame(root)
 middle.pack(side="left", fill="y")
 
-right = tk.Frame(root)
-right.pack(side="left", fill="both", expand=True)
+# =========================
+# MAIN SPLIT (resizable)
+# =========================
+main_pane = tk.PanedWindow(root, orient=tk.HORIZONTAL)
+main_pane.pack(fill="both", expand=True)
 
-graph_frame = tk.Frame(root)
-graph_frame.pack(side="right", fill="both", expand=True)
+# -------------------------
+# EDITOR + METADATA PANEL
+# -------------------------
+right = tk.Frame(main_pane)
+main_pane.add(right)
+
+# -------------------------
+# GRAPH PANEL
+# -------------------------
+graph_frame = tk.Frame(main_pane)
+main_pane.add(graph_frame)
+
+main_pane.paneconfig(right, minsize=400)
+main_pane.paneconfig(graph_frame, minsize=300)
+state.graph_frame = graph_frame
 
 # =========================
 # MAIN UI COMPONENTS
@@ -60,88 +79,46 @@ bar.pack(fill="x", pady=5)
 row1 = tk.Frame(bar)
 row1.pack(fill="x")
 
-cho_selector = ttk.Combobox(row1, width=15)
-cho_selector.pack(side="left", padx=5)
-
-def refresh_cho_selector():
-    from db import session, CHO
-
-    chos = [c.custom_id for c in session.query(CHO)]
-    cho_selector["values"] = chos
-
-    if chos:
-        cho_selector.set(chos[0])
-        state.current_cho = chos[0]
-
-def on_cho_change(event):
-    state.current_cho = cho_selector.get()
-    generate_graph(graph_frame, state)
-
-cho_selector.bind("<<ComboboxSelected>>", on_cho_change)
-
-refresh_cho_selector()
-state.current_cho = cho_selector.get()
-
-field_selector = ttk.Combobox(
-    row1,
-    values=["dc:title", "dc:creator", "dc:date", "dc:subject", "dc:description"],
-    width=15
-)
-field_selector.set("dc:title")
-field_selector.pack(side="left", padx=5)
-
-def on_field_change(event):
-    state.current_field = field_selector.get()
-
-field_selector.bind("<<ComboboxSelected>>", on_field_change)
-
-state.current_field = field_selector.get()
-
 tk.Button(row1, text="Save", command=editor.save).pack(side="left", padx=3)
 
 tk.Button(
     row1,
-    text="Add Tag",
-
-        command=lambda: editor.add_tag(
-            state.current_field,
-            cho_selector.get()
-        )
-
+    text="Tag",
+    command=metadata_panel.open_add_dialog
 ).pack(side="left", padx=3)
 
 tk.Button(
     row1,
-    text="Remove Tag",
+    text="Untag",
     command=metadata_panel.delete
 ).pack(side="left", padx=3)
 
 # ---- Row 2 (analysis tools) ----
-row2 = tk.Frame(bar)
-row2.pack(fill="x")
+#row1 = tk.Frame(bar)
+#row1.pack(fill="x")
+
+#tk.Button(
+#    row2,
+#    text="Generate Graph",
+#    command=lambda: generate_graph(graph_frame, state)
+#).pack(side="left", padx=3)
 
 tk.Button(
-    row2,
-    text="Generate Graph",
-    command=lambda: generate_graph(graph_frame, state)
-).pack(side="left", padx=3)
-
-tk.Button(
-    row2,
+    row1,
     text="Compare",
     command=lambda: compare(state.current_cho)
 ).pack(side="left", padx=3)
 
-tk.Button(row2, text="Search", command=search).pack(side="left", padx=3)
+tk.Button(row1, text="Search", command=search).pack(side="left", padx=3)
 
 tk.Button(
-    row2,
+    row1,
     text="CHO RDF",
     command=lambda: export_cho_rdf(state.current_cho)
 ).pack(side="left", padx=3)
 
 tk.Button(
-    row2,
+    row1,
     text="Mem. RDF",
     command=lambda: export_memory_rdf(state.current_memory)
 ).pack(side="left", padx=3)
@@ -151,8 +128,5 @@ tk.Button(
 # =========================
 
 cho_panel.load()
-refresh_cho_selector()
-
 memory_panel.load()
-
 root.mainloop()

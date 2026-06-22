@@ -7,7 +7,7 @@ class CHOPanel:
     def __init__(self, parent, state, label):
         self.state = state
         self.label = label
-
+        self.chos = []
         self.listbox = tk.Listbox(parent)
         self.listbox.pack(fill="both", expand=True)
 
@@ -17,8 +17,14 @@ class CHOPanel:
         self.listbox.bind("<<ListboxSelect>>", self.select)
 
     def load(self):
-        load_list(self.listbox, session.query(CHO),
-                  lambda c: f"{c.custom_id} - {c.title}")
+        from db import session, CHO
+    
+        self.chos = session.query(CHO).all()
+    
+        self.listbox.delete(0, "end")
+    
+        for c in self.chos:
+            self.listbox.insert("end", f"{c.custom_id} - {c.title}")
 
     def add(self):
         cid = simpledialog.askstring("ID", "CHO ID")
@@ -48,18 +54,19 @@ class CHOPanel:
             session.commit()
             self.load()
 
-    def select(self, e):
-        sel = self.listbox.curselection()
-        if not sel:
-            self.state.current_cho = None
-            self.label.config(text="No CHO selected")
+    def select(self, event):
+        selected = self.listbox.curselection()
+        if not selected:
             return
-
-        value = self.listbox.get(sel[0])
-        cid = value.split(" - ")[0]
-
-        self.state.current_cho = cid
-        self.label.config(text=f"Active CHO: {cid}")
-                    
-        if self.label:
-            self.label.config(text=f"Active CHO: {cid}")
+    
+        idx = selected[0]
+    
+        if idx >= len(self.chos):
+            return
+    
+        cho = self.chos[idx]
+    
+        self.state.current_cho = cho.custom_id
+    
+        from features.graph import generate_graph
+        generate_graph(self.state.graph_frame, self.state)
