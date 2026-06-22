@@ -65,9 +65,16 @@ class CHOPanel:
             return
     
         cho = self.chos[idx]
+        cid = cho.custom_id
     
-        self.state.current_cho = cho.custom_id
+        # ✅ update state
+        self.state.current_cho = cid
         self.state.current_memory = None
-        
+    
+        # ✅ 🔥 NEW: update metadata panel
+        if hasattr(self.state, "metadata_panel"):
+            self.state.metadata_panel.show_cho_metadata(cid)
+    
+        # ✅ update graph
         from features.graph import generate_graph
         generate_graph(self.state.graph_frame, self.state)

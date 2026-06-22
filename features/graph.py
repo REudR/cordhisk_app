@@ -265,31 +265,47 @@ def generate_graph(frame, state):
     def on_click(event):
         if event.xdata is None or event.ydata is None:
             return
-
+    
         for node, (x, y) in pos.items():
             if abs(event.xdata - x) < 0.05 and abs(event.ydata - y) < 0.05:
-
+    
+                # =========================
+                # CHO CLICK
+                # =========================
                 if node.startswith("CHO:"):
                     cho_id = node_data[node]
-                
-                    # ✅ CRITICAL FIX
+    
                     state.current_cho = cho_id
-                    state.current_memory = None   # 🔥 THIS LINE FIXES EVERYTHING
-                
-                    show_cho_tree(cho_id)
+                    state.current_memory = None
+    
+                    if hasattr(state, "metadata_panel"):
+                        state.metadata_panel.show_cho_metadata(cho_id)
+    
                     generate_graph(state.graph_frame, state)
-
+    
+                # =========================
+                # MEMORY CLICK
+                # =========================
                 elif node.startswith("memory:"):
                     state.current_memory = node_data[node]
+    
+                    if hasattr(state, "metadata_panel"):
+                        state.metadata_panel.refresh()
+    
                     generate_graph(state.graph_frame, state)
-
+    
+                # =========================
+                # TAG CLICK
+                # =========================
                 else:
+                    from tkinter import messagebox
+    
                     md = node_data[node]
                     messagebox.showinfo(
                         "Tag",
                         f"{md['field']} → {md['value']}"
                     )
-
+    
                 break
 
     fig.canvas.mpl_connect("button_press_event", on_click)

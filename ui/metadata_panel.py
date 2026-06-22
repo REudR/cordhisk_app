@@ -16,12 +16,12 @@ class MetadataPanel:
         # =========================
         self.tree = ttk.Treeview(
             frame,
-            columns=("CHO", "Field", "Value", "Index"),
+            columns=("CHO", "Field", "Value", "Memory", "Index"),
             show="headings",
             height=6
         )
 
-        for col in ("CHO", "Field", "Value"):
+        for col in ("CHO", "Field", "Value", "Memory"):
             self.tree.heading(col, text=col)
 
         self.tree.pack(fill="x")
@@ -44,16 +44,48 @@ class MetadataPanel:
     # =========================
     def refresh(self):
         self.tree.delete(*self.tree.get_children())
-
+    
         for i, s in enumerate(self.state.spans):
             self.tree.insert(
                 "",
                 "end",
-                values=(s["cho"], s["field"], s["value"], i)
+                values=(
+                    s["cho"],
+                    s["field"],
+                    s["value"],
+                    getattr(self.state.current_memory, "custom_id", ""),
+                    i
+                )
             )
+    
+        self.tree["displaycolumns"] = ("CHO", "Field", "Value", "Memory")
 
-        # hide index column
-        self.tree["displaycolumns"] = ("CHO", "Field", "Value")
+    def show_cho_metadata(self, cho_id):
+        from db import session, Memory
+        from services.metadata import extract_metadata
+    
+        self.tree.delete(*self.tree.get_children())
+    
+        rows = []
+        idx = 0
+    
+        for m in session.query(Memory):
+            for md in extract_metadata(m.text):
+                if md["cho"] == cho_id:
+                    self.tree.insert(
+                        "",
+                        "end",
+                        values=(
+                            md["cho"],
+                            md["field"],
+                            md["value"],
+                            m.custom_id,
+                            idx
+                        )
+                    )
+                    idx += 1
+    
+        self.tree["displaycolumns"] = ("CHO", "Field", "Value", "Memory")
 
     # =========================
     # DELETE METADATA

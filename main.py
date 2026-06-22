@@ -95,7 +95,8 @@ tk.Button(
 
 # ---- Row 2 (analysis tools) ----
 #row1 = tk.Frame(bar)
-#row1.pack(fill="x")
+#
+row1.pack(fill="x")
 
 #tk.Button(
 #    row2,
