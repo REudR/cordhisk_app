@@ -4,3 +4,4 @@ class AppState:
         self.current_memory = None
         self.canvas = None
         self.unsaved_changes = False
+        self.spans = []

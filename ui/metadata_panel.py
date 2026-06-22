@@ -5,6 +5,9 @@ from db import session, CHO
 
 class MetadataPanel:
     def __init__(self, parent, state, editor):
+        import tkinter as tk
+        from tkinter import ttk
+
         self.state = state
         self.editor = editor
 
@@ -23,6 +26,9 @@ class MetadataPanel:
 
         self.tree.pack(fill="x")
 
+        self.tree.bind("<<TreeviewSelect>>", self.on_select)
+
+        # Buttons
         btns = tk.Frame(frame)
         btns.pack(fill="x")
 
@@ -32,86 +38,97 @@ class MetadataPanel:
     # =========================
     # REFRESH PANEL
     # =========================
+    
     def refresh(self):
         self.tree.delete(*self.tree.get_children())
-
-        mem = self.state.current_memory
-        if not mem:
-            return
-
-        metadata = extract_metadata(mem.text)
-
-        for md in metadata:
+    
+        for i, s in enumerate(self.state.spans):
             self.tree.insert(
                 "",
                 "end",
-                values=(md["cho"], md["field"], md["value"])
+                values=(s["cho"], s["field"], s["value"]),
+                iid=str(i) 
             )
-
     # =========================
     # ADD METADATA
     # =========================
     def add(self):
-        mem = self.state.current_memory
-        if not mem:
-            messagebox.showerror("Error", "No memory selected")
+        import tkinter as tk
+        from tkinter import simpledialog, messagebox
+    
+        try:
+            sel_start = self.editor.text.index(tk.SEL_FIRST)
+            sel_end = self.editor.text.index(tk.SEL_LAST)
+    
+            start = int(self.editor.text.count("1.0", sel_start)[0])
+            end   = int(self.editor.text.count("1.0", sel_end)[0])
+    
+        except:
+            messagebox.showerror("Error", "Select text first")
             return
-
-        # ✅ CHO selection (improved)
-        chos = [c.custom_id for c in session.query(CHO)]
-
-        if not chos:
-            messagebox.showerror("Error", "No CHOs available")
-            return
-
-        cho = simpledialog.askstring(
-            "CHO",
-            f"Enter CHO ID:\nAvailable: {', '.join(chos)}"
-        )
+    
+        cho = simpledialog.askstring("CHO", "Enter CHO ID")
         if not cho:
             return
-
-        # ✅ Field (from toolbar if available)
-        field = getattr(self.state, "current_field", None)
-        if not field:
-            field = simpledialog.askstring("Field", "Enter metadata field (e.g. dc:title)")
-            if not field:
-                return
-
-        # ✅ Value
-        value = simpledialog.askstring("Value", "Enter metadata value")
-        if not value:
-            return
-
-        tag = f'<{field} cho="{cho}">{value}</{field}>'
-
-        self.editor.text.insert("end", "\n" + tag)
-        self.editor.highlight()
-
+    
+        field = self.state.current_field
+        value = self.editor.text.get(tk.SEL_FIRST, tk.SEL_LAST)
+    
+        self.state.spans.append({
+            "start": start,
+            "end": end,
+            "field": field,
+            "cho": cho,
+            "value": value
+        })
+    
+        self.state.spans.sort(key=lambda s: s["start"])
+        self.editor.highlight_spans()
         self.refresh()
+
 
     # =========================
     # DELETE METADATA
     # =========================
+    
     def delete(self):
         selected = self.tree.selection()
         if not selected:
             return
-
-        item = self.tree.item(selected[0])
-        cho, field, value = item["values"]
-
-        mem = self.state.current_memory
-        if not mem:
-            return
-
-        tag = f'<{field} cho="{cho}">{value}</{field}>'
-
-        txt = self.editor.text.get("1.0", "end")
-        txt = txt.replace(tag, "")
-
-        self.editor.text.delete("1.0", "end")
-        self.editor.text.insert("1.0", txt)
-
-        self.editor.highlight()
+    
+        # ✅ retrieve span index directly
+        idx = int(selected[0])
+    
+        if 0 <= idx < len(self.state.spans):
+            del self.state.spans[idx]
+    
+        # ✅ update UI
+        self.editor.highlight_spans()
         self.refresh()
+
+    def on_select(self, event):
+        selected = self.tree.selection()
+        if not selected:
+            return
+    
+        idx = self.tree.index(selected[0])
+    
+        if idx >= len(self.state.spans):
+            return
+    
+        span = self.state.spans[idx]
+    
+        # scroll text to span
+        start = f"1.0+{span['start']}c"
+    
+        self.editor.text.see(start)
+    
+        # optional: temporary highlight
+        self.editor.text.tag_remove("active_span", "1.0", "end")
+        self.editor.text.tag_config("active_span", background="#ffcc66")
+    
+        self.editor.text.tag_add(
+            "active_span",
+            f"1.0+{span['start']}c",
+            f"1.0+{span['end']}c"
+        )

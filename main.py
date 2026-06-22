@@ -113,7 +113,7 @@ tk.Button(
 tk.Button(
     row1,
     text="Remove Tag",
-    command=editor.remove_tag
+    command=metadata_panel.delete
 ).pack(side="left", padx=3)
 
 # ---- Row 2 (analysis tools) ----
