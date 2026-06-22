@@ -2,7 +2,7 @@
 
 A desktop application for annotating textual memories and linking them to Cultural Heritage Objects (CHOs) through structured metadata.
 
-## Features
+Features
 
 - Annotate text with semantic metadata (Dublin Core)
 - Link annotations to CHOs
@@ -10,7 +10,7 @@ A desktop application for annotating textual memories and linking them to Cultur
 - Explore metadata by Memory or CHO
 - Multi-language annotation support
 
-## Installation
+Installation
 
 1. Clone the repository:
 
