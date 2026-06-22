@@ -1,25 +1,49 @@
-# CORDHISK App
+# Cordhisk App
 
-A semantic annotation and knowledge graph tool for Cultural Heritage Objects (CHOs).
+A desktop application for annotating textual memories and linking them to Cultural Heritage Objects (CHOs) through structured metadata.
 
 ## Features
 
-- Create and manage Cultural Heritage Objects
-- Import and annotate memories
-- Tag text with metadata fields (dc:, dcterms:)
-- Compare metadata across memories
-- Search memories
-- Export RDF metadata
-- Generate interactive knowledge graphs
-
-![App Screenshot](screenshot.png)
+- Annotate text with semantic metadata (Dublin Core)
+- Link annotations to CHOs
+- Graph visualization of relationships
+- Explore metadata by Memory or CHO
+- Multi-language annotation support
 
 ## Installation
 
-1. Clone repository
+1. Clone the repository:
+
+```bash
+git clone https://github.com/REudR/cordhisk_app.git
+cd cordhisk_app
+
+![App Screenshot](screenshot.png)
+
+2. Install dependencies
+
+pip install -r requirements.txt
+
+3. Run the app
+
+python main.py
+
+## Usage
+
+Select a memory → see annotations
+Click CHO → explore all related metadata
+Use graph view to navigate relationships
+
+## Project structure
+
+ui/ → interface components
+features/ → graph, search, export
+services/ → parsing, metadata logic
+state.py → shared app state
 
 ## About
 
+Copyright (c) 2026 Rafael Ramírez Eudave. See LICENSE file.
 This code has been produced at the Delft University of Technology with the support of Microsoft Copilot.
 
 This code and the data herein contained represents a development based on the following research: Ramírez Eudave, R., Ferreira, T.M. & Giardina, G. Communities co-creating metadata: a new paradigm towards FAIR everyday heritage. npj Herit. Sci. (2026). https://doi.org/10.1038/s40494-026-02706-1
