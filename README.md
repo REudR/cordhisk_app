@@ -10,6 +10,8 @@ Features
 - Explore metadata by Memory or CHO
 - Multi-language annotation support
 
+![App Screenshot](screenshot.png)
+
 ## Installation
 
 1. Clone the repository:
@@ -17,8 +19,6 @@ Features
 ```bash
 git clone https://github.com/REudR/cordhisk_app.git
 cd cordhisk_app
-
-![App Screenshot](screenshot.png)
 
 2. Install dependencies
 
