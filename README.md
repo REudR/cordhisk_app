@@ -16,4 +16,4 @@ A semantic annotation and knowledge graph tool for Cultural Heritage Objects (CH
 
 ## Installation
 
-1. Clone repository:
+1. Clone repository
