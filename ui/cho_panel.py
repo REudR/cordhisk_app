@@ -67,6 +67,7 @@ class CHOPanel:
         cho = self.chos[idx]
     
         self.state.current_cho = cho.custom_id
-    
+        self.state.current_memory = None
+        
         from features.graph import generate_graph
         generate_graph(self.state.graph_frame, self.state)
