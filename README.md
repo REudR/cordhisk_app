@@ -10,7 +10,7 @@ Features
 - Explore metadata by Memory or CHO
 - Multi-language annotation support
 
-Installation
+## Installation
 
 1. Clone the repository:
 
@@ -27,7 +27,7 @@ pip install -r requirements.txt
 3. Run the app
 
 python main.py
-
+```
 ## Usage
 
 Select a memory → see annotations
