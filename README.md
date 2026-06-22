@@ -20,5 +20,7 @@ A semantic annotation and knowledge graph tool for Cultural Heritage Objects (CH
 
 ## About
 
+This code has been produced by Rafael Ramirez Eudave, with the support of Microsoft Copilot.
+
 This code and the data herein contained represents a development based on the following research: Ramírez Eudave, R., Ferreira, T.M. & Giardina, G. Communities co-creating metadata: a new paradigm towards FAIR everyday heritage. npj Herit. Sci. (2026). https://doi.org/10.1038/s40494-026-02706-1
 This project has received funding from the European Union’s Horizon Europe 2023 research and innovation programme under the Marie Skłodowska Curie grant agreement No 101149833 for the project «Community-driven Digitisation for Heritage at Risk» (CORDHISK).
