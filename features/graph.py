@@ -6,6 +6,7 @@ from matplotlib.lines import Line2D
 
 from db import session, Memory, CHO
 from services.metadata import extract_metadata, get_memory_title
+from utils import MetadataType
 from features.tree_views import show_cho_tree
 
 
@@ -25,15 +26,21 @@ def get_cho_color_map(cho_ids):
 
 
 # =========================
-# CATEGORY COLOR
+# METADATA TYPE COLORS
 # =========================
-def get_category_color(field):
-    if field.startswith("dc:") or field.startswith("dcterms:"):
-        return "#ffcc66"  # CHO metadata
-    elif field.startswith("oaf:") or field.startswith("rdaGr2:"):
-        return "#66b3ff"  # Agent metadata
+def get_metadata_color(metadata_type, field):
+    """Color nodes based on metadata type and field"""
+    if metadata_type == MetadataType.MEMORY.value:
+        # Memory-intrinsic metadata (WebResource)
+        return "#a1d99b"
     else:
-        return "#cccccc"
+        # CHO-linked metadata
+        if field.startswith("dc:") or field.startswith("dcterms:"):
+            return "#ffcc66"  # CHO (Dublin Core)
+        elif field.startswith("oaf:") or field.startswith("rdaGr2:"):
+            return "#66b3ff"  # Agent
+        else:
+            return "#cccccc"
 
 
 # =========================
@@ -51,7 +58,7 @@ def generate_graph(frame, state):
         state.canvas = None
 
     G = nx.Graph()
-    node_types = {}
+    node_types = {}  # memory, memory_metadata, cho, cho_metadata, tag
     node_data = {}
 
     # =========================
@@ -62,40 +69,59 @@ def generate_graph(frame, state):
 
         for md in extract_metadata(m.text):
             mn = f"memory:{m.custom_id}"
-            cn = f"CHO:{md['cho']}"
-            tn = f"tag:{md['value']}"
-
-            G.add_edges_from([(mn, cn), (cn, tn)])
-
-            node_types[mn] = "memory"
-            node_types[cn] = "cho"
-            node_types[tn] = "tag"
-
-            node_data[mn] = m
-            node_data[cn] = md["cho"]
-            node_data[tn] = md
+            
+            # ✅ SEPARATE HANDLING BY METADATA TYPE
+            if md.get("type") == MetadataType.MEMORY.value:
+                # Memory-intrinsic metadata: attach directly to Memory
+                mmd_node = f"memory_metadata:{m.custom_id}:{md['field']}"
+                G.add_edge(mn, mmd_node)
+                
+                node_types[mn] = "memory"
+                node_types[mmd_node] = "memory_metadata"
+                
+                node_data[mn] = m
+                node_data[mmd_node] = md
+            
+            else:
+                # CHO-linked metadata: full chain Memory → CHO → Metadata
+                cn = f"CHO:{md['cho']}"
+                cmd_node = f"cho_metadata:{md['cho']}:{md['field']}"
+                
+                G.add_edges_from([(mn, cn), (cn, cmd_node)])
+                
+                node_types[mn] = "memory"
+                node_types[cn] = "cho"
+                node_types[cmd_node] = "cho_metadata"
+                
+                node_data[mn] = m
+                node_data[cn] = md["cho"]
+                node_data[cmd_node] = md
 
     else:
         cid = state.current_cho
 
         for m in session.query(Memory):
             for md in extract_metadata(m.text):
-                if md["cho"] != cid:
+                if md.get("type") == MetadataType.MEMORY.value:
+                    # Skip memory-intrinsic metadata in CHO view
+                    continue
+                
+                if md.get("cho") != cid:
                     continue
 
                 mn = f"memory:{m.custom_id}"
-                tn = f"tag:{md['value']}"
                 cn = f"CHO:{cid}"
+                cmd_node = f"cho_metadata:{cid}:{md['field']}"
 
-                G.add_edges_from([(mn, tn), (tn, cn)])
+                G.add_edges_from([(mn, cn), (cn, cmd_node)])
 
                 node_types[mn] = "memory"
-                node_types[tn] = "tag"
                 node_types[cn] = "cho"
+                node_types[cmd_node] = "cho_metadata"
 
                 node_data[mn] = m
-                node_data[tn] = md
                 node_data[cn] = cid
+                node_data[cmd_node] = md
 
     if not G.nodes:
         messagebox.showinfo("Info", "No data to display")
@@ -106,29 +132,24 @@ def generate_graph(frame, state):
     # =========================
     pos = {}
     offset = 0
-    cho_groups = {}
+    groups = {}
 
+    # Group by memory or cho
     for n in G.nodes:
-        if node_types[n] == "cho":
-            cho_groups.setdefault(node_data[n], []).append(n)
+        if node_types[n] == "memory":
+            gid = f"mem:{node_data[n].custom_id}"
+        elif node_types[n] == "memory_metadata":
+            gid = f"mem:{node_data[n]['field'].split(':')[0]}"  # Group by field category
+        elif node_types[n] == "cho":
+            gid = f"cho:{node_data[n]}"
+        elif node_types[n] == "cho_metadata":
+            gid = f"cho:{node_data[n]['cho']}"
+        else:
+            gid = "other"
+        
+        groups.setdefault(gid, []).append(n)
 
-    for node in G.nodes:
-        if node_types[node] == "tag":
-            md = node_data[node]
-            cho_groups.setdefault(md["cho"], []).append(node)
-    
-        elif node_types[node] == "memory":
-            if state.current_memory:
-                # ✅ keep memory grouped with its CHO
-                cho_groups.setdefault(
-                    state.current_memory.custom_id,
-                    []
-                ).append(node)
-    for node in G.nodes:
-        if node_types[node] == "cho":
-            cho_groups.setdefault(node_data[node], []).append(node)
-
-    for _, nodes in cho_groups.items():
+    for _, nodes in groups.items():
         sub = G.subgraph(nodes)
         sub_pos = nx.kamada_kawai_layout(sub, center=(offset, 0))
         pos.update(sub_pos)
@@ -149,8 +170,10 @@ def generate_graph(frame, state):
         # COLOR
         if ntype == "memory":
             color = "#9ecae1"
-        elif ntype == "tag":
-            color = get_category_color(node_data[node]["field"])
+        elif ntype == "memory_metadata":
+            color = "#a1d99b"  # Green for memory metadata
+        elif ntype == "cho_metadata":
+            color = get_metadata_color(MetadataType.CHO.value, node_data[node]["field"])
         elif ntype == "cho":
             color = "#66c2a5"
         else:
@@ -158,22 +181,26 @@ def generate_graph(frame, state):
 
         # Highlight selected memory
         if ntype == "memory" and state.current_memory == node_data[node]:
-            color = "red"
+            color = "#1f77b4"
 
         # SIZE
         if ntype == "cho":
             size = 1400
         elif ntype == "memory":
             size = 1000
+        elif ntype == "memory_metadata" or ntype == "cho_metadata":
+            size = 600
         else:
             size = 700
 
         # SHAPE
         shape = "o"
         if ntype == "memory":
-            shape = "s"
-        elif ntype == "tag":
-            shape = "h"
+            shape = "s"  # square
+        elif ntype == "memory_metadata":
+            shape = "D"  # diamond for memory metadata
+        elif ntype == "cho_metadata":
+            shape = "h"  # hexagon for cho metadata
 
         nx.draw_networkx_nodes(
             G, pos,
@@ -183,27 +210,29 @@ def generate_graph(frame, state):
             node_size=size,
             ax=ax
         )
+
     # =========================
     # EDGES (color-based)
     # =========================
     edge_colors = []
     
     for u, v in G.edges:
-        # Normalize direction (edges are undirected)
-        nodes = (u, v)
-    
-        # ✅ Memory → Tag (annotation)
-        if "memory:" in u or "memory:" in v:
-            edge_colors.append("#444444")   # dark grey
-    
-        # ✅ Tag → CHO (classification)
+        # Memory to memory_metadata
+        if ("memory_metadata:" in u or "memory_metadata:" in v):
+            edge_colors.append("#2ca02c")  # Dark green for memory attachment
+        # Memory to CHO
+        elif ("memory:" in u and "CHO:" in v) or ("CHO:" in u and "memory:" in v):
+            edge_colors.append("#ff7f0e")  # Orange for memory-cho link
+        # CHO to cho_metadata
+        elif ("cho_metadata:" in u or "cho_metadata:" in v):
+            edge_colors.append("#1f77b4")  # Dark blue for cho attachment
         else:
-            edge_colors.append("#bbbbbb")   # light grey
+            edge_colors.append("#cccccc")  # Default grey
     
     nx.draw_networkx_edges(
         G,
         pos,
-        width=2,                 # ✅ uniform thickness
+        width=2,
         edge_color=edge_colors,
         ax=ax
     )
@@ -218,10 +247,10 @@ def generate_graph(frame, state):
 
         if ntype == "memory":
             labels[node] = get_memory_title(data.text, data.custom_id)
-
-        elif ntype == "tag":
+        elif ntype == "memory_metadata":
             labels[node] = data["field"].split(":")[-1]
-
+        elif ntype == "cho_metadata":
+            labels[node] = data["field"].split(":")[-1]
         elif ntype == "cho":
             cho_obj = session.query(CHO).filter_by(custom_id=data).first()
             labels[node] = cho_obj.title if cho_obj else data
@@ -238,6 +267,9 @@ def generate_graph(frame, state):
         Line2D([0], [0], marker='s', color='w', label='Memory',
                markerfacecolor='#9ecae1', markersize=10),
 
+        Line2D([0], [0], marker='D', color='w', label='Memory Metadata',
+               markerfacecolor='#a1d99b', markersize=10),
+
         Line2D([0], [0], marker='h', color='w', label='CHO Metadata',
                markerfacecolor='#ffcc66', markersize=10),
 
@@ -248,7 +280,7 @@ def generate_graph(frame, state):
     ax.legend(handles=legend_elements)
 
     # =========================
-    # CONTEXT TITLE (NEW)
+    # CONTEXT TITLE
     # =========================
     if state.current_memory:
         title = f"Memory View: {state.current_memory.custom_id}"
@@ -256,7 +288,6 @@ def generate_graph(frame, state):
         title = f"CHO View: {state.current_cho}"
 
     ax.set_title(title)
-
     ax.margins(0.2)
 
     # =========================
@@ -295,16 +326,20 @@ def generate_graph(frame, state):
                     generate_graph(state.graph_frame, state)
     
                 # =========================
-                # TAG CLICK
+                # METADATA CLICK (Memory or CHO)
                 # =========================
                 else:
                     from tkinter import messagebox
     
                     md = node_data[node]
-                    messagebox.showinfo(
-                        "Tag",
-                        f"{md['field']} → {md['value']}"
-                    )
+                    md_type = md.get("type", "unknown")
+                    
+                    if md_type == MetadataType.MEMORY.value:
+                        msg = f"[Memory Metadata]\n{md['field']}\nValue: {md['value']}"
+                    else:
+                        msg = f"[CHO Metadata]\n{md['field']}\nValue: {md['value']}\nCHO: {md.get('cho', 'N/A')}"
+                    
+                    messagebox.showinfo("Metadata", msg)
     
                 break
 
