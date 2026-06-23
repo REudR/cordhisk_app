@@ -100,41 +100,60 @@ def generate_graph(frame, state):
 
     else:
         cid = state.current_cho
-
+        
         for m in session.query(Memory):
+        
+            memory_connected = False
+            memory_md = []
+            cho_md = []
+        
+            # First pass: classify metadata
             for md in extract_metadata(m.text):
-
                 if md.get("type") == MetadataType.MEMORY.value:
-                    mn = f"memory:{m.custom_id}"
-                    mmd_node = f"memory_metadata:{m.custom_id}:{md['field']}"
-
-                    G.add_edge(mn, mmd_node)
-
-                    node_types[mn] = "memory"
-                    node_types[mmd_node] = "memory_metadata"
-
-                    node_data[mn] = m
-                    node_data[mmd_node] = md
+                    memory_md.append(md)
                 else:
-                    if md.get("cho") != cid:
-                        continue
-
-                    mn = f"memory:{m.custom_id}"
-                    cn = f"CHO:{cid}"
-                    cmd_node = f"cho_metadata:{cid}:{md['field']}"
-
-                    G.add_edges_from([
-                        (mn, cmd_node),
-                        (cmd_node, cn)
-                    ])
-
-                    node_types[mn] = "memory"
-                    node_types[cn] = "cho"
-                    node_types[cmd_node] = "cho_metadata"
-
-                    node_data[mn] = m
-                    node_data[cn] = cid
-                    node_data[cmd_node] = md
+                    if md.get("cho") == cid:
+                        memory_connected = True
+                        cho_md.append(md)
+        
+            # ✅ Skip memories NOT linked to the CHO
+            if not memory_connected:
+                continue
+        
+            mn = f"memory:{m.custom_id}"
+            node_types[mn] = "memory"
+            node_data[mn] = m
+        
+            # ✅ Add CHO node once
+            cn = f"CHO:{cid}"
+            node_types[cn] = "cho"
+            node_data[cn] = cid
+        
+            # =========================
+            # ADD CHO METADATA (main connections)
+            # =========================
+            for md in cho_md:
+                cmd_node = f"cho_metadata:{cid}:{md['field']}:{md['value']}"
+        
+                G.add_edges_from([
+                    (mn, cmd_node),
+                    (cmd_node, cn)
+                ])
+        
+                node_types[cmd_node] = "cho_metadata"
+                node_data[cmd_node] = md
+        
+            # =========================
+            # OPTIONAL: include memory metadata
+            # (only for connected memories)
+            # =========================
+            for md in memory_md:
+                mmd_node = f"memory_metadata:{m.custom_id}:{md['field']}"
+        
+                G.add_edge(mn, mmd_node)
+        
+                node_types[mmd_node] = "memory_metadata"
+                node_data[mmd_node] = md
 
     if not G.nodes:
         messagebox.showinfo("Info", "No data to display")
