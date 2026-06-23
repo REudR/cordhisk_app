@@ -102,26 +102,39 @@ def generate_graph(frame, state):
 
         for m in session.query(Memory):
             for md in extract_metadata(m.text):
-                if md.get("type") == MetadataType.MEMORY.value:
-                    # Skip memory-intrinsic metadata in CHO view
-                    continue
+                # ✅ FIX: Include memory-intrinsic metadata in CHO view
+                # They show all memories linked to this CHO through any metadata type
                 
-                if md.get("cho") != cid:
-                    continue
+                if md.get("type") == MetadataType.MEMORY.value:
+                    # Include memory-intrinsic metadata in the graph
+                    mn = f"memory:{m.custom_id}"
+                    mmd_node = f"memory_metadata:{m.custom_id}:{md['field']}"
+                    
+                    G.add_edge(mn, mmd_node)
+                    
+                    node_types[mn] = "memory"
+                    node_types[mmd_node] = "memory_metadata"
+                    
+                    node_data[mn] = m
+                    node_data[mmd_node] = md
+                else:
+                    # CHO-linked metadata
+                    if md.get("cho") != cid:
+                        continue
 
-                mn = f"memory:{m.custom_id}"
-                cn = f"CHO:{cid}"
-                cmd_node = f"cho_metadata:{cid}:{md['field']}"
+                    mn = f"memory:{m.custom_id}"
+                    cn = f"CHO:{cid}"
+                    cmd_node = f"cho_metadata:{cid}:{md['field']}"
 
-                G.add_edges_from([(mn, cn), (cn, cmd_node)])
+                    G.add_edges_from([(mn, cn), (cn, cmd_node)])
 
-                node_types[mn] = "memory"
-                node_types[cn] = "cho"
-                node_types[cmd_node] = "cho_metadata"
+                    node_types[mn] = "memory"
+                    node_types[cn] = "cho"
+                    node_types[cmd_node] = "cho_metadata"
 
-                node_data[mn] = m
-                node_data[cn] = cid
-                node_data[cmd_node] = md
+                    node_data[mn] = m
+                    node_data[cn] = cid
+                    node_data[cmd_node] = md
 
     if not G.nodes:
         messagebox.showinfo("Info", "No data to display")
@@ -319,6 +332,7 @@ def generate_graph(frame, state):
                 # =========================
                 elif node.startswith("memory:"):
                     state.current_memory = node_data[node]
+                    state.current_cho = None
     
                     if hasattr(state, "metadata_panel"):
                         state.metadata_panel.refresh()
