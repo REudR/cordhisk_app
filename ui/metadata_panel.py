@@ -31,8 +31,6 @@ class MetadataPanel:
 
 
         self.tree.pack(fill="x")
-
-        # ✅ CORRECT bindings
         self.tree.bind("<Double-1>", self.edit)
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
 
