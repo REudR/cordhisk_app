@@ -86,18 +86,12 @@ row1 = tk.Frame(bar)
 row1.pack(fill="x")
 
 tk.Button(row1, text="Save", command=editor.save).pack(side="left", padx=3)
-tk.Button(row1, text="Tag", command=metadata_panel.open_add_cho_dialog).pack(side="left", padx=3)
-tk.Button(row1, text="Untag", command=metadata_panel.delete).pack(side="left", padx=3)
-
-# -------- Row 2: Analysis / Export --------
-row2 = tk.Frame(bar)
-row2.pack(fill="x")
-
-tk.Button(row2, text="Compare", command=lambda: compare(state.current_cho)).pack(side="left", padx=3)
-tk.Button(row2, text="Search", command=search).pack(side="left", padx=3)
-tk.Button(row2, text="CHO RDF", command=lambda: export_cho_rdf(state.current_cho)).pack(side="left", padx=3)
-tk.Button(row2, text="Mem. RDF", command=lambda: export_memory_rdf(state.current_memory)).pack(side="left", padx=3)
-
+#tk.Button(row1, text="Tag", command=metadata_panel.open_add_cho_dialog).pack(side="left", padx=3)
+#tk.Button(row1, text="Untag", command=metadata_panel.delete).pack(side="left", padx=3)
+tk.Button(row1, text="Compare", command=lambda: compare(state.current_cho)).pack(side="left", padx=3)
+tk.Button(row1, text="Search", command=search).pack(side="left", padx=3)
+tk.Button(row1, text="CHO RDF", command=lambda: export_cho_rdf(state.current_cho)).pack(side="left", padx=3)
+tk.Button(row1, text="Mem. RDF", command=lambda: export_memory_rdf(state.current_memory)).pack(side="left", padx=3)
 
 # =========================
 # INIT
