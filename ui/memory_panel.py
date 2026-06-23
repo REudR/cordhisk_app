@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from db import session, Memory
-from utils import load_list
+from utils import load_list, MetadataType
 from services.file_service import copy_memory_file
 from services.metadata import build_rdf_block
 from ui.dialogs import ask_memory_full_form
@@ -33,8 +33,8 @@ class MemoryPanel:
     
         if m:
             self.state.current_memory = m   # ✅ CRITICAL FIX
+            self.state.current_cho = None  # Reset CHO when selecting memory
             self.editor.load(m)
-            self.state.current_memory = m
             
             from features.graph import generate_graph
             generate_graph(self.state.graph_frame, self.state)
@@ -58,9 +58,11 @@ class MemoryPanel:
             txt = f.read()
 
         rdf_block = build_rdf_block(metadata)
+        
+        # ✅ FIX: Wrap metadata with type="memory" to mark as memory-intrinsic, not CHO-linked
         inline_metadata = ""
         for field, value in metadata.items():
-            inline_metadata += f'<{field} cho="{metadata.get("dc:source", "default")}">{value}</{field}>\n'
+            inline_metadata += f'<{field} type="memory">{value}</{field}>\n'
         
         txt = rdf_block + inline_metadata + "\n" + txt
 
@@ -76,7 +78,7 @@ class MemoryPanel:
 
         self.load()
         self.state.current_memory = m
-        self.state.current_memory = m
+        self.state.current_cho = None  # Reset CHO
         self.editor.load(m)
         from features.graph import generate_graph
         generate_graph(self.editor.text.master.master.graph_frame, self.state)
