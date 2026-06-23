@@ -1,87 +1,67 @@
 import xml.etree.ElementTree as ET
-from tkinter import filedialog
-from db import session, Memory
+from utils import MetadataType
 from services.metadata import extract_metadata
 
-def export_cho_rdf(cho_id):
-    import xml.etree.ElementTree as ET
-    from tkinter import filedialog, messagebox
-    from db import session, Memory
-    from services.metadata import extract_metadata
-
-    if not cho_id:
-        messagebox.showerror("Error", "No CHO selected")
-        return
-
+def export_cho_rdf(cho):
+    """Export CHO-linked metadata as RDF/XML"""
+    if not cho:
+        return ""
+    
     root = ET.Element("rdf:RDF")
-    found = False
-
-    for m in session.query(Memory):
-
-        # ✅ filter metadata for THIS memory + THIS cho
-        meta = [
-            md for md in extract_metadata(m.text)
-            if md["cho"] == cho_id
-        ]
-
-        if not meta:
-            continue
-
-        found = True
-
-        # ✅ ONE block per memory
-        desc = ET.SubElement(root, "rdf:Description")
-
-        # ✅ (optional but useful) add memory id
-        desc.set("memory", m.custom_id)
-
-        for md in meta:
-            ET.SubElement(desc, md["field"]).text = md["value"]
-
-    if not found:
-        messagebox.showinfo("Info", "No metadata found for this CHO")
-        return
-
-    path = filedialog.asksaveasfilename(defaultextension=".xml")
-    if path:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(ET.tostring(root, encoding="unicode"))
+    root.set("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+    root.set("xmlns:dc", "http://purl.org/dc/elements/1.1/")
+    root.set("xmlns:dcterms", "http://purl.org/dc/terms/")
+    root.set("xmlns:oaf", "http://www.openarchives.org/OAI/2.0/oai_dc/")
+    root.set("xmlns:rdaGr2", "http://RDVocab.info/GRupElmComps/")
+    
+    desc = ET.SubElement(root, "rdf:Description")
+    desc.set("rdf:about", f"http://example.org/cho/{cho.custom_id}")
+    
+    # Add CHO properties
+    ET.SubElement(desc, "rdf:type").text = "CHO"
+    ET.SubElement(desc, "dc:identifier").text = cho.custom_id
+    ET.SubElement(desc, "dc:title").text = cho.title
+    
+    return ET.tostring(root, encoding="unicode")
 
 def export_memory_rdf(memory):
-    import xml.etree.ElementTree as ET
-    from tkinter import filedialog, messagebox
-    from services.metadata import extract_metadata
-
+    """Export memory with both intrinsic and CHO-linked metadata"""
     if not memory:
-        messagebox.showerror("Error", "No memory selected or loaded")
-        return
-
-    metadata = extract_metadata(memory.text)
-
-    if not metadata:
-        messagebox.showinfo("Info", "No metadata in memory")
-        return
-
+        return ""
+    
     root = ET.Element("rdf:RDF")
-
-    # ✅ group by CHO inside this memory
-    grouped = {}
-
+    root.set("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+    root.set("xmlns:dc", "http://purl.org/dc/elements/1.1/")
+    root.set("xmlns:dcterms", "http://purl.org/dc/terms/")
+    root.set("xmlns:web", "http://example.org/web/")
+    root.set("xmlns:oaf", "http://www.openarchives.org/OAI/2.0/oai_dc/")
+    root.set("xmlns:rdaGr2", "http://RDVocab.info/GRupElmComps/")
+    
+    desc = ET.SubElement(root, "rdf:Description")
+    desc.set("rdf:about", f"http://example.org/memory/{memory.custom_id}")
+    
+    # Add memory properties
+    ET.SubElement(desc, "rdf:type").text = "Memory"
+    ET.SubElement(desc, "dc:identifier").text = memory.custom_id
+    ET.SubElement(desc, "dc:title").text = memory.title
+    
+    # Add metadata
+    metadata = extract_metadata(memory.text)
+    
+    # Memory-intrinsic metadata
     for md in metadata:
-        grouped.setdefault(md["cho"], []).append(md)
-
-    for cho_id, items in grouped.items():
-
-        # ✅ ONE block per CHO
-        desc = ET.SubElement(root, "rdf:Description")
-
-        # ✅ attach CHO id
-        desc.set("cho", cho_id)
-
-        for md in items:
-            ET.SubElement(desc, md["field"]).text = md["value"]
-
-    path = filedialog.asksaveasfilename(defaultextension=".xml")
-    if path:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(ET.tostring(root, encoding="unicode"))
+        if md.get("type") == MetadataType.MEMORY.value:
+            tag = md["field"].replace(":", "_")
+            ET.SubElement(desc, tag).text = md["value"]
+    
+    # CHO-linked metadata (as references)
+    cho_refs = set()
+    for md in metadata:
+        if md.get("type") == MetadataType.CHO.value:
+            cho_refs.add(md.get("cho"))
+    
+    for cho_id in cho_refs:
+        ref = ET.SubElement(desc, "dc:relation")
+        ref.text = f"http://example.org/cho/{cho_id}"
+    
+    return ET.tostring(root, encoding="unicode")
