@@ -73,7 +73,7 @@ class CHOPanel:
     
         # ✅ 🔥 NEW: update metadata panel
         if hasattr(self.state, "metadata_panel"):
-            self.state.metadata_panel.show_cho_metadata(cid)
+            self.state.metadata_panel.refresh()
     
         # ✅ update graph
         from features.graph import generate_graph
