@@ -2,6 +2,8 @@ import re
 import tkinter as tk
 from tkinter import ttk
 from enum import Enum
+from services.types import MetadataType
+from services.metadata_schema import METADATA_FIELDS
 
 RE_METADATA = re.compile(r'<(.*?) cho="(.*?)">(.*?)</\1>')
 RE_MEMORY_METADATA = re.compile(r'<(.*?) type="memory">(.*?)</\1>')
@@ -12,38 +14,6 @@ class MetadataType(Enum):
     """Distinguishes metadata origins"""
     MEMORY = "memory"      # WebResource fields - intrinsic to the memory
     CHO = "cho"            # CHO/Agent fields - linked to Cultural Heritage Objects
-
-# Field definitions by type and category
-METADATA_FIELDS = {
-    "CHO": {
-        "type": MetadataType.CHO,
-        "fields": [
-            "dc:contributor", "dc:coverage", "dc:creator", "dc:date",
-            "dc:description", "dc:format", "dc:language", "dc:publisher",
-            "dc:source", "dc:subject", "dc:title", "dc:type",
-            "dcterms:created", "dcterms:extent", "dcterms:issued",
-            "dcterms:medium", "dcterms:provenance", "dcterms:spatial",
-            "dcterms:tableOfContents", "dcterms:temporal"
-        ]
-    },
-    "Agent": {
-        "type": MetadataType.CHO,
-        "fields": [
-            "oaf:name", "rdaGr2:biographicalInformation",
-            "rdaGr2:dateOfBirth", "rdaGr2:dateOfDeath",
-            "rdaGr2:dateOfEstablishment", "rdaGr2:dateOfTermination",
-            "rdaGr2:gender", "rdaGr2:placeOfBirth",
-            "rdaGr2:placeOfDeath", "rdaGr2:professionOrOccupation"
-        ]
-    },
-    "WebResource": {
-        "type": MetadataType.MEMORY,
-        "fields": [
-            "web:dc:creator", "web:dc:description",
-            "web:dc:source", "web:dcterms:created"
-        ]
-    }
-}
 
 def field_to_alias(field):
     """Convert metadata field to user-friendly label"""
@@ -96,7 +66,7 @@ def get_all_fields_by_type(metadata_type):
     for config in METADATA_FIELDS.values():
         # ✅ FIX: compare values instead of enum objects
         if config["type"].value == metadata_type.value:
-            fields.extend(config["fields"])
+            fields.extend(config["fields"].keys())
     return fields
 
 def get_category_for_field(field):
@@ -140,28 +110,25 @@ def make_tree_window(title, columns=None):
 
     return tree
 
-def field_to_alias(field):
-    """Convert metadata field to user-friendly label"""
-    if not field:
-        return ""
-
-    name = field.split(":")[-1]
-    name = re.sub(r"([a-z])([A-Z])", r"\1 \2", name)
-    name = name.replace("_", " ")
-
-    return name.capitalize()
-
 
 def field_to_display(field):
-    """Convert field to '[Category] Alias' format"""
+    """Return '[Category] Label'"""
+
     category = get_category_for_field(field) or "Unknown"
-    alias = field_to_alias(field)
-    return f"[{category}] {alias}"
+
+    for cfg_name, config in METADATA_FIELDS.items():
+        if field in config["fields"]:
+            label = config["fields"][field].get("label", field)
+            return f"[{cfg_name}] {label}"
+
+    return f"[{category}] {field}"
 
 
 def display_to_field(display, fields):
-    """Convert display string back to real field"""
+    """Convert display back to field"""
+
     for f in fields:
         if field_to_display(f) == display:
             return f
+
     return None

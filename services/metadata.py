@@ -1,5 +1,5 @@
 import re
-from utils import MetadataType
+from services.types import MetadataType
 import xml.etree.ElementTree as ET
 
 

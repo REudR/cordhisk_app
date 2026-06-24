@@ -4,7 +4,8 @@ from tkinter import messagebox
 
 from db import session
 from services.metadata import parse_text_and_spans, rebuild_text_from_spans
-from utils import MetadataType
+from services.types import MetadataType
+
 
 
 class Editor:

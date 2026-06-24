@@ -1,9 +1,10 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from db import session, CHO
+from services.metadata_schema import METADATA_FIELDS
+from services.types import MetadataType
 from utils import (
     MetadataType,
-    METADATA_FIELDS,
     get_all_fields_by_type,
     field_to_display,
     display_to_field
@@ -49,7 +50,6 @@ class MetadataPanel:
             cho_tab,
             columns=("CHO", "Field", "Value"),
             show="headings",
-
             height=4
         )
         for col in ("CHO", "Field", "Value"):
