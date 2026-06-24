@@ -44,10 +44,12 @@ class MetadataPanel:
         cho_tab.pack_propagate(False)
         notebook.add(cho_tab, text="CHO Metadata")
 
+
         self.cho_tree = ttk.Treeview(
             cho_tab,
             columns=("CHO", "Field", "Value"),
             show="headings",
+
             height=4
         )
         for col in ("CHO", "Field", "Value"):
@@ -297,3 +299,52 @@ class MetadataPanel:
 
         self.rebuild_and_save()
         self.refresh()
+
+    def show_cho_metadata_grouped(self, cho_id):
+        """Display CHO metadata grouped by memory"""
+    
+        from db import Memory
+        from services.metadata import extract_metadata
+    
+        # Clear existing data
+        self.cho_tree.delete(*self.cho_tree.get_children())
+        self.cho_row_map = {}
+    
+        # =========================
+        # Collect metadata per memory
+        # =========================
+        grouped = {}
+    
+        for mem in session.query(Memory):
+            md_list = extract_metadata(mem.text)
+    
+            for md in md_list:
+                if md.get("type") == MetadataType.CHO.value and md.get("cho") == cho_id:
+    
+                    if mem.custom_id not in grouped:
+                        grouped[mem.custom_id] = []
+    
+                    grouped[mem.custom_id].append(md)
+    
+        # =========================
+        # Populate TreeView
+        # =========================
+        for mem_id, items in grouped.items():
+    
+            # Parent node (memory)
+            parent = self.cho_tree.insert(
+                "",
+                "end",
+                values=(mem_id, "—", "—")
+            )
+    
+            # Child nodes (metadata)
+            for md in items:
+                item_id = self.cho_tree.insert(
+                    parent,
+                    "end",
+                    values=(md.get("cho"), md["field"], md["value"])
+                )
+    
+                # Optional: store reference if needed later
+                self.cho_row_map[item_id] = md
