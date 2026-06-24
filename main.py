@@ -86,7 +86,7 @@ bar.pack(fill="x", pady=5)
 row1 = tk.Frame(bar)
 row1.pack(fill="x")
 
-tk.Button(row1, text="Save", command=editor.save).pack(side="left", padx=3)
+#tk.Button(row1, text="Save", command=editor.save).pack(side="left", padx=3)
 #tk.Button(row1, text="Tag", command=metadata_panel.open_add_cho_dialog).pack(side="left", padx=3)
 #tk.Button(row1, text="Untag", command=metadata_panel.delete).pack(side="left", padx=3)
 tk.Button(row1, text="Compare", command=lambda: compare(state.current_cho)).pack(side="left", padx=3)

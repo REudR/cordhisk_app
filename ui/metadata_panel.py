@@ -18,7 +18,7 @@ class MetadataPanel:
         self.memory_row_map = {}
         self.cho_row_map = {}
 
-        frame = tk.LabelFrame(parent, text="Metadata")
+        frame = tk.LabelFrame(parent, text="Metadata embedded in the Memory")
         frame.pack(fill="x", pady=5)
 
         notebook = ttk.Notebook(frame)
@@ -36,12 +36,12 @@ class MetadataPanel:
         )
         self.memory_tree.heading("Field", text="Field")
         self.memory_tree.heading("Value", text="Value")
-        self.memory_tree.pack(fill="x")
-
+        self.memory_tree.pack(fill="both", expand=True)
         self.memory_tree.bind("<Double-1>", self.edit_memory_metadata)
 
         # ===== CHO TAB
         cho_tab = tk.Frame(notebook)
+        cho_tab.pack_propagate(False)
         notebook.add(cho_tab, text="CHO Metadata")
 
         self.cho_tree = ttk.Treeview(
@@ -52,8 +52,11 @@ class MetadataPanel:
         )
         for col in ("CHO", "Field", "Value"):
             self.cho_tree.heading(col, text=col)
+            self.cho_tree.column("CHO", width=80, stretch=False)
+            self.cho_tree.column("Field", width=120, stretch=False)
+            self.cho_tree.column("Value", width=300, stretch=True)
 
-        self.cho_tree.pack(fill="x")
+        self.cho_tree.pack(fill="both", expand=True)
         self.cho_tree.bind("<Double-1>", self.edit_cho_metadata)
 
         # buttons
@@ -202,6 +205,7 @@ class MetadataPanel:
                 messagebox.showerror("Error", "Select a CHO")
                 return
     
+
             self.state.spans.append({
                 "start": start,
                 "end": start + len(text),
@@ -210,11 +214,12 @@ class MetadataPanel:
                 "cho": cho,
                 "type": MetadataType.CHO.value
             })
-    
+            
+            self.editor.highlight_spans()
             self.editor.save()
             self.refresh()
             dialog.destroy()
-    
+
         tk.Button(dialog, text="Add", command=submit).pack(pady=10)
     # =========================
     # EDIT MEMORY
