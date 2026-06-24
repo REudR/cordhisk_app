@@ -1,7 +1,13 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from db import session, CHO
-from utils import MetadataType, METADATA_FIELDS, get_all_fields_by_type
+from utils import (
+    MetadataType,
+    METADATA_FIELDS,
+    get_all_fields_by_type,
+    field_to_display,
+    display_to_field
+)
 
 
 class MetadataPanel:
@@ -138,35 +144,78 @@ class MetadataPanel:
         except:
             messagebox.showerror("Error", "Select text first")
             return
-
+    
         dialog = tk.Toplevel()
-
+        dialog.title("Add CHO Metadata")
+        dialog.geometry("320x220")
+    
+        # =========================
+        # CHO
+        # =========================
         tk.Label(dialog, text="CHO").pack()
-        cho_box = ttk.Combobox(dialog,
-            values=[c.custom_id for c in session.query(CHO)])
+    
+        cho_box = ttk.Combobox(
+            dialog,
+            values=[c.custom_id for c in session.query(CHO)]
+        )
         cho_box.pack()
+    
+        # =========================
+        # FIELD (ALIASES + CATEGORY ✅)
+        # =========================
 
         tk.Label(dialog, text="Field").pack()
-        field_box = ttk.Combobox(dialog,
-            values=get_all_fields_by_type(MetadataType.CHO))
-        field_box.pack()
 
+        # ✅ Get all CHO-related fields
+        fields = get_all_fields_by_type(MetadataType.CHO)
+        
+        # ✅ Convert to user-friendly display
+        displays = [field_to_display(f) for f in fields]
+        
+        field_box = ttk.Combobox(dialog, values=displays)
+        field_box["state"] = "readonly"   # ✅ important for correct rendering
+        field_box.pack()
+        
+        # ✅ Optional default selection
+        if displays:
+            field_box.set(displays[0])
+    
+        # =========================
+        # SUBMIT
+        # =========================
         def submit():
+            display = field_box.get()
+            real_field = display_to_field(display, fields)
+            
+            if not real_field:
+                messagebox.showerror("Error", "Invalid field")
+                return
+
+            real_field = display_to_field(display, fields)
+    
+            if not real_field:
+                messagebox.showerror("Error", "Invalid field")
+                return
+    
+            cho = cho_box.get()
+            if not cho:
+                messagebox.showerror("Error", "Select a CHO")
+                return
+    
             self.state.spans.append({
                 "start": start,
                 "end": start + len(text),
-                "field": field_box.get(),
+                "field": real_field,
                 "value": text,
-                "cho": cho_box.get(),
+                "cho": cho,
                 "type": MetadataType.CHO.value
             })
-
+    
             self.editor.save()
             self.refresh()
             dialog.destroy()
-
-        tk.Button(dialog, text="Add", command=submit).pack()
-
+    
+        tk.Button(dialog, text="Add", command=submit).pack(pady=10)
     # =========================
     # EDIT MEMORY
     # =========================

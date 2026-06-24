@@ -45,11 +45,57 @@ METADATA_FIELDS = {
     }
 }
 
+def field_to_alias(field):
+    """Convert metadata field to user-friendly label"""
+
+    if not field:
+        return ""
+
+    # Remove namespace
+    name = field.split(":")[-1]
+
+    # Split camelCase
+    name = re.sub(r"([a-z])([A-Z])", r"\1 \2", name)
+
+    # Replace underscores
+    name = name.replace("_", " ")
+
+    return name.capitalize()
+
+
+def field_to_display(field):
+    """Convert field to '[Category] Alias' format"""
+
+    category = get_category_for_field(field) or "Unknown"
+    alias = field_to_alias(field)
+
+    return f"[{category}] {alias}"
+
+
+def display_to_field(display, fields):
+    """Convert display string back to real field"""
+
+    for f in fields:
+        if field_to_display(f) == display:
+            return f
+
+    return None
+
+def alias_to_field(alias, fields):
+    """Find the real field corresponding to an alias"""
+
+    for f in fields:
+        if field_to_alias(f) == alias:
+            return f
+
+    return None
+
 def get_all_fields_by_type(metadata_type):
     """Return all fields for a given metadata type (MEMORY or CHO)"""
     fields = []
-    for category, config in METADATA_FIELDS.items():
-        if config["type"] == metadata_type:
+    for config in METADATA_FIELDS.values():
+        # ✅ FIX: compare values instead of enum objects
+        if config["type"].value == metadata_type.value:
             fields.extend(config["fields"])
     return fields
 
@@ -93,3 +139,29 @@ def make_tree_window(title, columns=None):
     tree.pack(fill="both", expand=True)
 
     return tree
+
+def field_to_alias(field):
+    """Convert metadata field to user-friendly label"""
+    if not field:
+        return ""
+
+    name = field.split(":")[-1]
+    name = re.sub(r"([a-z])([A-Z])", r"\1 \2", name)
+    name = name.replace("_", " ")
+
+    return name.capitalize()
+
+
+def field_to_display(field):
+    """Convert field to '[Category] Alias' format"""
+    category = get_category_for_field(field) or "Unknown"
+    alias = field_to_alias(field)
+    return f"[{category}] {alias}"
+
+
+def display_to_field(display, fields):
+    """Convert display string back to real field"""
+    for f in fields:
+        if field_to_display(f) == display:
+            return f
+    return None
