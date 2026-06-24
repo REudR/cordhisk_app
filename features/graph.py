@@ -1,8 +1,8 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import random
+from collections import defaultdict
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.lines import Line2D
 from tkinter import messagebox
 
 from db import session, Memory, CHO
@@ -42,6 +42,9 @@ def generate_graph(frame, state):
     node_types = {}
     node_data = {}
 
+    # ✅ count occurrences
+    node_counts = defaultdict(int)
+
     # =========================
     # MEMORY VIEW
     # =========================
@@ -54,17 +57,22 @@ def generate_graph(frame, state):
 
         for md in extract_metadata(m.text):
 
+            key = f"{md['field']}::{md['value']}"
+
+            # MEMORY METADATA
             if md.get("type") == MetadataType.MEMORY.value:
-                mmd_node = f"memory_metadata:{m.custom_id}:{md['field']}:{md['value']}"
+                mmd_node = f"memory_metadata:{key}"
 
                 G.add_edge(mn, mmd_node)
 
                 node_types[mmd_node] = "memory_metadata"
                 node_data[mmd_node] = md
+                node_counts[mmd_node] += 1
 
+            # CHO METADATA
             else:
                 cn = f"CHO:{md['cho']}"
-                cmd_node = f"cho_metadata:{md['cho']}:{md['field']}:{md['value']}"
+                cmd_node = f"cho_metadata:{key}"
 
                 G.add_edges_from([
                     (mn, cmd_node),
@@ -76,6 +84,7 @@ def generate_graph(frame, state):
 
                 node_types[cmd_node] = "cho_metadata"
                 node_data[cmd_node] = md
+                node_counts[cmd_node] += 1
 
     # =========================
     # CHO VIEW
@@ -107,9 +116,10 @@ def generate_graph(frame, state):
             node_types[mn] = "memory"
             node_data[mn] = m
 
-            # CHO metadata
+            # CHO METADATA
             for md in cho_md:
-                cmd_node = f"cho_metadata:{cid}:{md['field']}:{md['value']}"
+                key = f"{md['field']}::{md['value']}"
+                cmd_node = f"cho_metadata:{key}"
 
                 G.add_edges_from([
                     (mn, cmd_node),
@@ -118,15 +128,18 @@ def generate_graph(frame, state):
 
                 node_types[cmd_node] = "cho_metadata"
                 node_data[cmd_node] = md
+                node_counts[cmd_node] += 1
 
-            # Memory metadata
+            # MEMORY METADATA
             for md in memory_md:
-                mmd_node = f"memory_metadata:{m.custom_id}:{md['field']}:{md['value']}"
+                key = f"{md['field']}::{md['value']}"
+                mmd_node = f"memory_metadata:{key}"
 
                 G.add_edge(mn, mmd_node)
 
                 node_types[mmd_node] = "memory_metadata"
                 node_data[mmd_node] = md
+                node_counts[mmd_node] += 1
 
     if not G.nodes:
         messagebox.showinfo("Info", "No data to display")
@@ -168,9 +181,7 @@ def generate_graph(frame, state):
         shape = "o"
         if ntype == "memory":
             shape = "s"
-        elif ntype == "memory_metadata":
-            shape = "D"
-        elif ntype == "cho_metadata":
+        elif ntype in ["memory_metadata", "cho_metadata"]:
             shape = "h"
 
         nx.draw_networkx_nodes(
@@ -185,39 +196,27 @@ def generate_graph(frame, state):
     # =========================
     # EDGES
     # =========================
-    for u, v in G.edges:
-
-        if "memory_metadata" in u or "memory_metadata" in v:
-            color = "#2ca02c"; rad = 0.25
-        elif "cho_metadata" in u or "cho_metadata" in v:
-            color = "#1f77b4"; rad = -0.25
-        else:
-            color = "#ff7f0e"; rad = 0.1
-
-        nx.draw_networkx_edges(
-            G, pos,
-            edgelist=[(u, v)],
-            edge_color=color,
-            width=1.6,
-            alpha=0.65,
-            connectionstyle=f"arc3,rad={rad}",
-            ax=ax
-        )
+    nx.draw_networkx_edges(G, pos, width=1.6, alpha=0.6, ax=ax)
 
     # =========================
-    # LABELS (✅ FIXED)
+    # LABELS WITH COUNTS
     # =========================
     labels = {}
     for node in G.nodes:
         ntype = node_types[node]
-        data = node_data[node]
+        data = node_data.get(node, {})
 
         if ntype == "memory":
             labels[node] = get_memory_title(data.text, data.custom_id)
 
         elif ntype in ["memory_metadata", "cho_metadata"]:
-            # ✅ ONLY FIELD NAME, NOT VALUE
-            labels[node] = data["field"].split(":")[-1]
+            field = data["field"].split(":")[-1]
+            count = node_counts[node]
+
+            if count > 1:
+                labels[node] = f"{field} ({count})"
+            else:
+                labels[node] = field
 
         elif ntype == "cho":
             cho_obj = session.query(CHO).filter_by(custom_id=data).first()
@@ -226,53 +225,42 @@ def generate_graph(frame, state):
     nx.draw_networkx_labels(G, pos, labels=labels, font_size=7, ax=ax)
 
     # =========================
-    # CLICK INTERACTION (✅ NEW)
+    # TOOLTIP ON HOVER
     # =========================
-    def on_click(event):
-        if event.xdata is None or event.ydata is None:
+    tooltip = ax.annotate(
+        "",
+        xy=(0, 0),
+        xytext=(10, 10),
+        textcoords="offset points",
+        bbox=dict(boxstyle="round", fc="w"),
+    )
+    tooltip.set_visible(False)
+
+    def on_move(event):
+        if event.xdata is None:
             return
 
         for node, (x, y) in pos.items():
-            if abs(event.xdata - x) < 0.08 and abs(event.ydata - y) < 0.08:
+            if abs(event.xdata - x) < 0.05 and abs(event.ydata - y) < 0.05:
 
                 ntype = node_types[node]
+                data = node_data.get(node)
 
-                # CHO click
-                if ntype == "cho":
-                    state.current_cho = node_data[node]
-                    state.current_memory = None
-                    generate_graph(frame, state)
+                if ntype in ["memory_metadata", "cho_metadata"]:
+                    tooltip.xy = (x, y)
+                    tooltip.set_text(f"{data['field']}\n{data['value']}")
+                    tooltip.set_visible(True)
+                    fig.canvas.draw_idle()
+                    return
 
-                # Memory click
-                elif ntype == "memory":
-                    state.current_memory = node_data[node]
-                    state.current_cho = None
-                    generate_graph(frame, state)
+        tooltip.set_visible(False)
+        fig.canvas.draw_idle()
 
-                # Metadata click ✅ SHOW FULL VALUE
-                elif ntype in ["memory_metadata", "cho_metadata"]:
-                    md = node_data[node]
+    fig.canvas.mpl_connect("motion_notify_event", on_move)
 
-                    if ntype == "memory_metadata":
-                        msg = (
-                            f"[Memory Metadata]\n\n"
-                            f"Field: {md['field']}\n"
-                            f"Value: {md['value']}"
-                        )
-                    else:
-                        msg = (
-                            f"[CHO Metadata]\n\n"
-                            f"Field: {md['field']}\n"
-                            f"Value: {md['value']}\n"
-                            f"CHO: {md.get('cho', 'N/A')}"
-                        )
-
-                    messagebox.showinfo("Metadata", msg)
-
-                break
-
-    fig.canvas.mpl_connect("button_press_event", on_click)
-
+    # =========================
+    # FINALIZE
+    # =========================
     ax.set_title(
         f"Memory View: {state.current_memory.custom_id}"
         if state.current_memory else f"CHO View: {state.current_cho}"

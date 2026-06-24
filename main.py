@@ -71,6 +71,7 @@ editor = Editor(right, state)
 
 cho_panel = CHOPanel(left, state, None)
 memory_panel = MemoryPanel(middle, editor, state)
+state.memory_panel = memory_panel
 
 metadata_panel = MetadataPanel(right, state, editor)
 state.metadata_panel = metadata_panel

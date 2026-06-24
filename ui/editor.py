@@ -66,20 +66,74 @@ class Editor:
         m = self.state.current_memory
         if not m:
             return
-
+    
         txt = self.text.get("1.0", tk.END)
-
-        # ✅ Rebuild tags invisibly for storage
-        final = rebuild_text_from_spans(txt, list(self.state.spans))
-
+        spans = list(self.state.spans)
+    
+        # =========================
+        # STEP 1: rebuild inline tags
+        # =========================
+        content = rebuild_text_from_spans(txt, spans)
+    
+        # =========================
+        # STEP 2: rebuild memory metadata block
+        # =========================
+        metadata = []
+        seen = set()
+    
+        for s in spans:
+            if s.get("type") == MetadataType.MEMORY.value:
+                field = s.get("field")
+                value = s.get("value")
+    
+                if not field or not value:
+                    continue
+    
+                key = (field, value)
+                if key in seen:
+                    continue
+                seen.add(key)
+    
+                metadata.append((field, value))
+    
+        block = "=== MEMORY METADATA START ===\n"
+    
+        for field, value in metadata:
+            block += f'<{field} type="memory">{value}</{field}>\n'
+    
+        block += "=== MEMORY METADATA END ===\n"
+    
+        # ✅ Clean join (no extra blank lines)
+        final = block + content.lstrip("\n")
+    
+        # =========================
+        # STEP 3: update model
+        # =========================
         m.text = final
-
+    
+        # ✅ Update title field (critical for left panel)
+        for field, value in metadata:
+            if field == "dc:title":
+                m.title = value
+                break
+    
+        # =========================
+        # STEP 4: write file
+        # =========================
         if m.file_path:
             with open(m.file_path, "w", encoding="utf-8") as f:
                 f.write(final)
-
+    
+        # =========================
+        # STEP 5: commit DB
+        # =========================
         session.commit()
-
+    
+        # =========================
+        # STEP 6: refresh UI (left panel) ✅
+        # =========================
+        if hasattr(self.state, "memory_panel"):
+            self.state.memory_panel.load()
     # =========================
     # HIGHLIGHT METADATA
     # =========================
@@ -89,6 +143,11 @@ class Editor:
         self.text.tag_remove("cho_meta", "1.0", tk.END)
 
         for s in getattr(self.state, "spans", []):
+        
+            # ✅ SKIP spans without positions
+            if "start" not in s or "end" not in s:
+                continue
+        
             try:
                 if s.get("type") == MetadataType.MEMORY.value:
                     tag = "memory_meta"
@@ -96,13 +155,13 @@ class Editor:
                     tag = "cho_meta"
                 else:
                     continue
-
+        
                 self.text.tag_add(
                     tag,
                     f"1.0+{s['start']}c",
                     f"1.0+{s['end']}c"
                 )
-
+        
             except Exception as e:
                 print("Highlight error:", e)
 
