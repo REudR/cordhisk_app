@@ -188,36 +188,60 @@ def parse_text_and_spans(text):
             "type": MetadataType.MEMORY.value
         })
 
-# =========================
-# EXTRACT METADATA
+import re
+
+# EXTRACT METADATA (SAFE)# =========================
 # =========================
 def extract_metadata(text):
 
     if not text:
         return []
 
-    # remove memory metadata block
-    text = re.sub(
+    metadata = []
+
+    # =========================
+    # 1. EXTRACT MEMORY BLOCK (WITHOUT DELETING IT YET)
+    # =========================
+    memory_blocks = re.findall(
+        r'=== MEMORY METADATA START ===(.*?)=== MEMORY METADATA END ===',
+        text,
+        flags=re.DOTALL
+    )
+
+    # =========================
+    # 2. PARSE MEMORY METADATA
+    # =========================
+    for block in memory_blocks:
+        for m in COMBINED_RE.finditer(block):
+            metadata.append({
+                "field": m.group("field"),
+                "cho": None,  # ✅ explicitly None for memory metadata
+                "value": m.group("value"),
+                "type": MetadataType.MEMORY.value
+            })
+
+    # =========================
+    # 3. REMOVE MEMORY BLOCK FROM TEXT (for CHO parsing only)
+    # =========================
+    text_wo_memory = re.sub(
         r'=== MEMORY METADATA START ===.*?=== MEMORY METADATA END ===',
         '',
         text,
         flags=re.DOTALL
     )
 
-    metadata = []
-
-    for m in COMBINED_RE.finditer(text):
+    # =========================
+    # 4. PARSE REMAINING (CHO METADATA)
+    # =========================
+    for m in COMBINED_RE.finditer(text_wo_memory):
         metadata.append({
             "field": m.group("field"),
             "cho": m.group("cho"),
             "value": m.group("value"),
-            "type": MetadataType.MEMORY.value
-                if m.group("type") == "memory"
-                else MetadataType.CHO.value
+            "type": MetadataType.CHO.value
         })
 
     return metadata
-
 
 # =========================
 # MEMORY TITLE
