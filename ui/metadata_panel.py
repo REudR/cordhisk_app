@@ -65,9 +65,10 @@ class MetadataPanel:
         btns = tk.Frame(frame)
         btns.pack(fill="x")
 
-        tk.Button(btns, text="Add Memory Meta", command=self.open_add_memory_dialog).pack(side="left")
-        tk.Button(btns, text="Add CHO Meta", command=self.open_add_cho_dialog).pack(side="left")
+        tk.Button(btns, text="+ Memory Meta", command=self.open_add_memory_dialog).pack(side="left")
+        tk.Button(btns, text="+ CHO Meta", command=self.open_add_cho_dialog).pack(side="left")
         tk.Button(btns, text="Delete", command=self.delete).pack(side="left")
+        tk.Button(btns, text="Save", command=editor.save).pack(side="left")
 
     # =========================
     # REFRESH (ONLY FROM SPANS ✅)
