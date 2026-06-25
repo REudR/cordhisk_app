@@ -10,6 +10,9 @@ from db import session, Memory, CHO
 from services.metadata import extract_metadata, get_memory_title
 from utils import MetadataType
 
+from tkinter import Frame, Button
+
+
 
 
 # =========================
@@ -45,6 +48,11 @@ def generate_graph(frame, state):
     # =========================
     # CLEANUP (FIXED)
     # =========================
+        
+    if hasattr(state, "control_frame") and state.control_frame:
+        state.control_frame.destroy()
+        state.control_frame = None
+
     if state.canvas:
         state.canvas.get_tk_widget().destroy()
         state.canvas = None
@@ -209,8 +217,16 @@ def generate_graph(frame, state):
     # =========================
     # DRAW
     # =========================
-    fig = plt.Figure()
+    
+    fig = plt.Figure(figsize=(14, 9))
+    
+    # ✅ REMOVE INTERNAL MARGINS
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    
     ax = fig.add_subplot(111)
+    
+    # ✅ HIDE AXES / FRAME
+    ax.set_axis_off()
 
     for node in G.nodes:
         ntype = node_types[node]
@@ -267,8 +283,8 @@ def generate_graph(frame, state):
         Patch(facecolor="#9ecae1", edgecolor="black", label="Memory (collapsed)"),
         Patch(facecolor="#66c2a5", label="CHO"),
         Patch(facecolor="#a1d99b", label="Memory Metadata"),
-        Patch(facecolor="#ffcc66", label="DC Metadata"),
-        Patch(facecolor="#66b3ff", label="Agent/RDA Metadata"),
+        Patch(facecolor="#ffcc66", label="CHO Metadata"),
+        Patch(facecolor="#66b3ff", label="Agent Metadata"),
     ]
     ax.legend(handles=legend_elements, loc="upper right")
 
@@ -306,14 +322,35 @@ def generate_graph(frame, state):
     canvas.draw()
     canvas.get_tk_widget().pack(fill="both", expand=True)
 
-    # ✅ toolbar (FIXED: no duplication)
-    toolbar = NavigationToolbar2Tk(canvas, frame)
-    toolbar.update()
-    state.toolbar = toolbar
-
     state.canvas = canvas
 
-        # =========================
+   
+    # =========================
+    # CONTROLS (FIXED)
+    # =========================
+    
+    control_frame = Frame(frame)
+    control_frame.pack(fill="x")
+    state.control_frame = control_frame
+    
+    # hidden toolbar (for functionality only)
+    hidden_toolbar = NavigationToolbar2Tk(canvas, frame)
+    hidden_toolbar.pack_forget()
+    canvas.toolbar = hidden_toolbar
+    state.hidden_toolbar = hidden_toolbar
+    
+    def zoom():
+        canvas.toolbar.zoom()
+    
+    def pan():
+        canvas.toolbar.pan()
+    
+    def reset():
+        ax.set_xlim(auto=True)
+        ax.set_ylim(auto=True)
+        canvas.draw()
+        
+    # =========================
     # CLICK HANDLER
     # =========================
     def on_click(event):

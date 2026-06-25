@@ -59,8 +59,8 @@ graph_frame = tk.Frame(right_container)
 right_container.add(right)
 right_container.add(graph_frame)
 
-right_container.paneconfig(right, minsize=250)
-right_container.paneconfig(graph_frame, minsize=650)
+right_container.paneconfig(right, minsize=200)
+right_container.paneconfig(graph_frame, minsize=700)
 
 state.graph_frame = graph_frame
 
