@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 
 from utils import MetadataType
@@ -11,25 +12,21 @@ from db import session, Memory
 # =========================================================
 
 def _get_id(obj):
-    """Return custom_id if object, else assume string"""
     return getattr(obj, "custom_id", obj)
 
 
 def _safe_text(value):
-    """Ensure XML-safe text"""
     if callable(value) or value is None:
         return None
     return str(value)
 
 
 def _save_file(rdf_string, default_name):
-    """Save RDF file using a dialog"""
     path = filedialog.asksaveasfilename(
         defaultextension=".rdf",
         initialfile=default_name,
         filetypes=[
             ("RDF files", "*.rdf"),
-            ("Text files", "*.txt"),
             ("All files", "*.*")
         ]
     )
@@ -42,9 +39,7 @@ def _save_file(rdf_string, default_name):
 
 
 def _indent(elem, level=0):
-    """
-    Pretty-print XML (human-readable)
-    """
+    """Pretty XML formatting"""
     i = "\n" + level * "  "
     if len(elem):
         if not elem.text or not elem.text.strip():
@@ -58,7 +53,7 @@ def _indent(elem, level=0):
 
 
 def _create_root():
-    """Create RDF root with namespaces"""
+    """Correct RDF namespaces"""
     return ET.Element("rdf:RDF", {
         "xmlns:rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
         "xmlns:dc": "http://purl.org/dc/elements/1.1/",
@@ -68,34 +63,57 @@ def _create_root():
 
 
 # =========================================================
+# UI: BUTTON SELECTION
+# =========================================================
+
+def _choose_export_mode():
+    result = {"value": None}
+
+    win = tk.Toplevel()
+    win.title("Export CHO RDF")
+    win.geometry("320x160")
+    win.resizable(False, False)
+
+    tk.Label(win, text="Choose export mode:", pady=10).pack()
+
+    def choose_one():
+        result["value"] = "one"
+        win.destroy()
+
+    def choose_all():
+        result["value"] = "all"
+        win.destroy()
+
+    tk.Button(win, text="From ONE memory", command=choose_one, width=22).pack(pady=5)
+    tk.Button(win, text="From ALL memories", command=choose_all, width=22).pack(pady=5)
+
+    win.grab_set()
+    win.wait_window()
+
+    return result["value"]
+
+
+# =========================================================
 # ENTRY POINT
 # =========================================================
 
 def export_cho_rdf(cho):
-    """
-    Ask user how to export CHO RDF
-    """
     if not cho:
         messagebox.showerror("Error", "No CHO selected")
         return ""
 
-    choice = simpledialog.askstring(
-        "Export CHO RDF",
-        "Choose export mode:\n\n"
-        "1 = From ONE memory\n"
-        "2 = From ALL memories (grouped)"
-    )
+    choice = _choose_export_mode()
 
-    if choice == "1":
+    if choice == "one":
         return _export_cho_single_memory(cho)
-    elif choice == "2":
+    elif choice == "all":
         return _export_cho_all_memories(cho)
-    else:
-        return ""
+
+    return ""
 
 
 # =========================================================
-# OPTION 1 — SINGLE MEMORY
+# SINGLE MEMORY EXPORT
 # =========================================================
 
 def _export_cho_single_memory(cho):
@@ -117,9 +135,7 @@ def _export_cho_single_memory(cho):
 
     root = _create_root()
 
-    # -----------------------------
-    # CHO node
-    # -----------------------------
+    # CHO
     cho_desc = ET.SubElement(root, "rdf:Description", {
         "rdf:about": f"http://example.org/cho/{cho_id}"
     })
@@ -129,48 +145,59 @@ def _export_cho_single_memory(cho):
 
     metadata = extract_metadata(memory.text or "")
 
+    mem_uri = f"http://example.org/memory/{memory.custom_id}"
+    contains = False
+
+    # ✅ separator
+    cho_desc.append(ET.Comment("========================================"))
+    cho_desc.append(ET.Comment(
+        f" MEMORY | ID: {memory.custom_id} | Title: {memory.title or 'N/A'} "
+    ))
+    cho_desc.append(ET.Comment("========================================"))
+    cho_desc[-1].tail = "\n\n"
+
+    part = ET.SubElement(cho_desc, "dcterms:hasPart")
+
+    block = ET.SubElement(part, "rdf:Description", {
+        "rdf:about": mem_uri
+    })
+
     for md in metadata:
         if md.get("type") == MetadataType.CHO.value and md.get("cho") == cho_id:
             field = md.get("field")
             value = _safe_text(md.get("value"))
             if field and value:
+                contains = True
                 ET.SubElement(cho_desc, field).text = value
+                ET.SubElement(block, field).text = value
 
-    # -----------------------------
-    # Memory node
-    # -----------------------------
-    mem_uri = f"http://example.org/memory/{memory.custom_id}"
+    # embedded WebResource ✅
+    web = ET.SubElement(block, "edm:WebResource")
 
-    ET.SubElement(cho_desc, "dcterms:hasPart").set("rdf:resource", mem_uri)
+    if memory.title:
+        ET.SubElement(web, "dc:title").text = memory.title
 
-    mem_desc = ET.SubElement(root, "rdf:Description", {
-        "rdf:about": mem_uri
-    })
+    ET.SubElement(web, "dc:identifier").text = memory.custom_id
 
-    ET.SubElement(mem_desc, "rdf:type").text = "edm:WebResource"
-    ET.SubElement(mem_desc, "dc:identifier").text = memory.custom_id
-
-    title = _safe_text(memory.title)
-    if title:
-        ET.SubElement(mem_desc, "dc:title").text = title
-
-    ET.SubElement(mem_desc, "edm:isRelatedTo").set(
+    ET.SubElement(block, "edm:isRelatedTo").set(
         "rdf:resource",
         f"http://example.org/cho/{cho_id}"
     )
 
-    # -----------------------------
-    # Output
-    # -----------------------------
-    _indent(root)
-    rdf_string = ET.tostring(root, encoding="unicode")
+    if contains:
+        part.tail = "\n\n"
+    else:
+        cho_desc.remove(part)
 
-    _save_file(rdf_string, f"cho_{cho_id}_single.rdf")
-    return rdf_string
+    _indent(root)
+    rdf = ET.tostring(root, encoding="unicode")
+    _save_file(rdf, f"cho_{cho_id}_single.rdf")
+
+    return rdf
 
 
 # =========================================================
-# OPTION 2 — ALL MEMORIES (GROUPED + LINKED)
+# ALL MEMORIES EXPORT
 # =========================================================
 
 def _export_cho_all_memories(cho):
@@ -178,9 +205,6 @@ def _export_cho_all_memories(cho):
 
     root = _create_root()
 
-    # -----------------------------
-    # CHO node
-    # -----------------------------
     cho_desc = ET.SubElement(root, "rdf:Description", {
         "rdf:about": f"http://example.org/cho/{cho_id}"
     })
@@ -188,67 +212,35 @@ def _export_cho_all_memories(cho):
     ET.SubElement(cho_desc, "rdf:type").text = "edm:ProvidedCHO"
     ET.SubElement(cho_desc, "dc:identifier").text = _safe_text(cho_id)
 
-    # optional object title
     title = _safe_text(getattr(cho, "title", None))
     if title:
         ET.SubElement(cho_desc, "dc:title").text = title
 
     memories = session.query(Memory).all()
-    linked_memories = []
-    seen_global = set()  # avoid duplicate metadata
+    seen = set()
 
-    # -----------------------------
-    # Process each memory
-    # -----------------------------
     for memory in memories:
-    
+
         metadata = extract_metadata(memory.text or "")
-        contains_cho = False
-    
         mem_uri = f"http://example.org/memory/{memory.custom_id}"
-    
-        # ✅ HUMAN-READABLE COMMENT (NEW)
-        comment_text = f" MEMORY | ID: {memory.custom_id} | Title: {memory.title or 'N/A'} "
-        cho_desc.append(ET.Comment(comment_text))
-    
-        # -------------------------
-        # Create memory block (provenance)
-        # -------------------------
-        part = ET.SubElement(cho_desc, "dcterms:hasPart")
-        block = ET.SubElement(part, "rdf:Description", {
-            "rdf:about": mem_uri
-        })
-    
-        for md in metadata:
-            if md.get("type") == MetadataType.CHO.value and md.get("cho") == cho_id:
-    
-                field = md.get("field")
-                value = _safe_text(md.get("value"))
-    
-                if not field or not value:
-                    continue
-    
-                contains_cho = True
-    
-                if (field, value) not in seen_global:
-                    ET.SubElement(cho_desc, field).text = value
-                    seen_global.add((field, value))
-    
-                ET.SubElement(block, field).text = value
-    
-        if contains_cho:
-            linked_memories.append(memory)
-        else:
-            cho_desc.remove(part)
 
-        # -------------------------
-        # Create memory block (provenance)
-        # -------------------------
+        contains = False
+
+        # ✅ separator block
+        cho_desc.append(ET.Comment("========================================"))
+        cho_desc.append(ET.Comment(
+            f" MEMORY | ID: {memory.custom_id} | Title: {memory.title or 'N/A'} "
+        ))
+        cho_desc.append(ET.Comment("========================================"))
+        cho_desc[-1].tail = "\n\n"
+
         part = ET.SubElement(cho_desc, "dcterms:hasPart")
+
         block = ET.SubElement(part, "rdf:Description", {
             "rdf:about": mem_uri
         })
 
+        # metadata
         for md in metadata:
             if md.get("type") == MetadataType.CHO.value and md.get("cho") == cho_id:
 
@@ -258,57 +250,41 @@ def _export_cho_all_memories(cho):
                 if not field or not value:
                     continue
 
-                contains_cho = True
+                contains = True
 
-                # deduplicate globally
-                if (field, value) not in seen_global:
+                if (field, value) not in seen:
                     ET.SubElement(cho_desc, field).text = value
-                    seen_global.add((field, value))
+                    seen.add((field, value))
 
-                # keep provenance (memory-level)
                 ET.SubElement(block, field).text = value
 
-        if contains_cho:
-            linked_memories.append(memory)
-        else:
-            cho_desc.remove(part)
+        # embedded WebResource
+        web = ET.SubElement(block, "edm:WebResource")
 
-    # -----------------------------
-    # Declare memory nodes
-    # -----------------------------
-    for memory in linked_memories:
+        if memory.title:
+            ET.SubElement(web, "dc:title").text = memory.title
 
-        mem_uri = f"http://example.org/memory/{memory.custom_id}"
+        ET.SubElement(web, "dc:identifier").text = memory.custom_id
 
-        mem_desc = ET.SubElement(root, "rdf:Description", {
-            "rdf:about": mem_uri
-        })
-
-        ET.SubElement(mem_desc, "rdf:type").text = "edm:WebResource"
-        ET.SubElement(mem_desc, "dc:identifier").text = memory.custom_id
-
-        title = _safe_text(memory.title)
-        if title:
-            ET.SubElement(mem_desc, "dc:title").text = title
-
-        # ✅ link memory → CHO
-        ET.SubElement(mem_desc, "edm:isRelatedTo").set(
+        ET.SubElement(block, "edm:isRelatedTo").set(
             "rdf:resource",
             f"http://example.org/cho/{cho_id}"
         )
 
-    # -----------------------------
-    # Output
-    # -----------------------------
-    _indent(root)
-    rdf_string = ET.tostring(root, encoding="unicode")
+        if contains:
+            part.tail = "\n\n"
+        else:
+            cho_desc.remove(part)
 
-    _save_file(rdf_string, f"cho_{cho_id}_all.rdf")
-    return rdf_string
+    _indent(root)
+    rdf = ET.tostring(root, encoding="unicode")
+    _save_file(rdf, f"cho_{cho_id}_all.rdf")
+
+    return rdf
 
 
 # =========================================================
-# MEMORY EXPORT (MULTIPLE CHOs SUPPORTED)
+# MEMORY EXPORT
 # =========================================================
 
 def export_memory_rdf(memory):
@@ -316,43 +292,30 @@ def export_memory_rdf(memory):
         messagebox.showerror("Error", "No memory selected")
         return ""
 
-    memory_id = _get_id(memory)
+    mid = _get_id(memory)
 
     root = _create_root()
 
     desc = ET.SubElement(root, "rdf:Description", {
-        "rdf:about": f"http://example.org/memory/{memory_id}"
+        "rdf:about": f"http://example.org/memory/{mid}"
     })
 
     ET.SubElement(desc, "rdf:type").text = "edm:WebResource"
-    ET.SubElement(desc, "dc:identifier").text = memory_id
+    ET.SubElement(desc, "dc:identifier").text = mid
 
-    title = _safe_text(memory.title)
-    if title:
-        ET.SubElement(desc, "dc:title").text = title
+    if memory.title:
+        ET.SubElement(desc, "dc:title").text = memory.title
 
     metadata = extract_metadata(memory.text or "")
-
     cho_refs = set()
 
-    # -----------------------------
-    # Memory intrinsic metadata
-    # -----------------------------
     for md in metadata:
         if md.get("type") == MetadataType.MEMORY.value:
-            field = md.get("field")
-            value = _safe_text(md.get("value"))
+            ET.SubElement(desc, md["field"]).text = _safe_text(md["value"])
 
-            if field and value:
-                ET.SubElement(desc, field).text = value
-
-    # -----------------------------
-    # CHO links
-    # -----------------------------
     for md in metadata:
-        if md.get("type") == MetadataType.CHO.value:
-            if md.get("cho"):
-                cho_refs.add(md.get("cho"))
+        if md.get("type") == MetadataType.CHO.value and md.get("cho"):
+            cho_refs.add(md["cho"])
 
     for cho_id in cho_refs:
         ET.SubElement(desc, "edm:isRelatedTo").set(
@@ -360,11 +323,8 @@ def export_memory_rdf(memory):
             f"http://example.org/cho/{cho_id}"
         )
 
-    # -----------------------------
-    # Output
-    # -----------------------------
     _indent(root)
-    rdf_string = ET.tostring(root, encoding="unicode")
+    rdf = ET.tostring(root, encoding="unicode")
+    _save_file(rdf, f"memory_{mid}.rdf")
 
-    _save_file(rdf_string, f"memory_{memory_id}.rdf")
-    return rdf_string
+    return rdf
