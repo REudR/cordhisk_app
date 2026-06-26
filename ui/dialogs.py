@@ -3,15 +3,36 @@ from tkinter import messagebox
 from db import session, Memory
 
 
-def ask_memory_full_form(initial=None):
-    if initial is None:
-        initial = {}
-
+def ask_memory_full_form(initial_metadata=None, initial_id=None, parent=None):
+    initial = initial_metadata or {}
     result = {}
-    win = tk.Toplevel()
-    win.title("New Memory")
-    win.grab_set()
 
+    # ✅ CREATE WINDOW (no parent → safest)
+    win = tk.Toplevel()
+    win.title("Memory")
+
+    # =========================
+    # SAFE CLOSE FUNCTION ✅
+    # =========================
+    def on_close():
+        try:
+            win.grab_release()
+        except Exception:
+            pass
+
+        if win.winfo_exists():
+            win.destroy()
+
+    # ✅ bind CLOSE BEFORE anything else critical
+    win.protocol("WM_DELETE_WINDOW", on_close)
+
+    # ✅ THEN apply modal behavior
+    win.grab_set()
+    win.focus_set()
+
+    # =========================
+    # FORM FIELDS
+    # =========================
     fields = [
         ("ID", "id"),
         ("dc:title", "dc:title"),
@@ -26,12 +47,10 @@ def ask_memory_full_form(initial=None):
     for i, (label, key) in enumerate(fields):
         tk.Label(win, text=label).grid(row=i, column=0, sticky="w", padx=5, pady=2)
 
-        # Use Text widget for description
         if key == "dc:description":
             entry = tk.Text(win, height=3, width=40)
             entry.grid(row=i, column=1, padx=5, pady=2)
 
-            # ✅ PREFILL Text widget
             if key in initial:
                 entry.insert("1.0", initial.get(key, ""))
 
@@ -39,13 +58,15 @@ def ask_memory_full_form(initial=None):
             entry = tk.Entry(win, width=40)
             entry.grid(row=i, column=1, padx=5, pady=2)
 
-            # ✅ PREFILL Entry widget
-            entry.insert(0, initial.get(key, ""))
+            if key == "id":
+                entry.insert(0, initial_id or "")
+            else:
+                entry.insert(0, initial.get(key, ""))
 
         entries[key] = entry
 
     # =========================
-    # SUBMIT
+    # OK ACTION ✅
     # =========================
     def ok():
         mid = entries["id"].get().strip()
@@ -54,10 +75,10 @@ def ask_memory_full_form(initial=None):
             messagebox.showerror("Error", "ID required")
             return
 
-        # ✅ Only check duplicates if it's a NEW ID
-        # (important: allows prefilling without false positives)
         existing = session.query(Memory).filter_by(custom_id=mid).first()
-        if "id" not in initial and existing:
+
+        # ✅ safe duplicate check
+        if existing and mid != initial_id:
             messagebox.showerror("Error", "Duplicate ID")
             return
 
@@ -78,19 +99,20 @@ def ask_memory_full_form(initial=None):
         result["id"] = mid
         result["metadata"] = metadata
 
-        win.destroy()
+        on_close()  # ✅ ALWAYS use safe close
 
     # =========================
-    # BUTTONS
+    # BUTTONS ✅
     # =========================
     tk.Button(win, text="OK", command=ok).grid(
         row=len(fields), column=0, padx=5, pady=5
     )
 
-    tk.Button(win, text="Cancel", command=win.destroy).grid(
+    tk.Button(win, text="Cancel", command=on_close).grid(
         row=len(fields), column=1, padx=5, pady=5
     )
 
+    # ✅ WAIT LAST (after everything is defined)
     win.wait_window()
 
     return result if result else None

@@ -65,7 +65,7 @@ class MetadataPanel:
         btns = tk.Frame(frame)
         btns.pack(fill="x")
 
-        tk.Button(btns, text="+ Memory Meta", command=self.open_add_memory_dialog).pack(side="left")
+        tk.Button(btns, text="+ Memory Meta", command=self.edit_memory_metadata).pack(side="left")
         tk.Button(btns, text="+ CHO Meta", command=self.open_add_cho_dialog).pack(side="left")
         tk.Button(btns, text="Delete", command=self.delete).pack(side="left")
         tk.Button(btns, text="Save", command=editor.save).pack(side="left")
@@ -227,14 +227,9 @@ class MetadataPanel:
     # =========================
     # EDIT MEMORY
     # =========================
-    def edit_memory_metadata(self, event):
-        item = self.memory_tree.identify_row(event.y)
-        if not item:
-            return
-
-        span = self.memory_row_map.get(item)
-        if not span:
-            return
+    def edit_memory_metadata(self, event=None):
+        if hasattr(self.state, "memory_panel"):
+            self.state.memory_panel.edit_memory_metadata()
 
         dialog = tk.Toplevel()
 
