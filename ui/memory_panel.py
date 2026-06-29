@@ -99,23 +99,30 @@ class MemoryPanel:
     # =========================
     # SELECT MEMORY
     # =========================
-    def select(self, e):
-        sel = self.listbox.get(tk.ACTIVE)
-        if not sel:
+    def select(self, event):
+        # ✅ delay execution so selection is updated
+        self.listbox.after(1, self._select)
+    
+    
+    def _select(self):
+        selection = self.listbox.curselection()
+        if not selection:
             return
-
+    
+        sel = self.listbox.get(selection[0])
+    
         mid = sel.split(" - ")[0]
         m = session.query(Memory).filter_by(custom_id=mid).first()
-
+    
         if m:
             self.state.current_memory = m
             self.state.current_cho = None
-
+    
             self.editor.load(m)
-
+    
             if hasattr(self.state, "metadata_panel"):
                 self.state.metadata_panel.refresh()
-
+    
             from features.graph import generate_graph
             generate_graph(self.state.graph_frame, self.state)
 
@@ -207,9 +214,11 @@ class MemoryPanel:
     # DELETE
     # =========================
     def delete(self):
-        sel = self.listbox.get(tk.ACTIVE)
-        if not sel:
+        selection = self.listbox.curselection()
+        if not selection:
             return
+        
+        sel = self.listbox.get(selection[0])
 
         mid = sel.split(" - ")[0]
         m = session.query(Memory).filter_by(custom_id=mid).first()

@@ -43,9 +43,11 @@ class CHOPanel:
         self.load()
 
     def delete(self):
-        sel = self.listbox.get(tk.ACTIVE)
-        if not sel:
+        selection = self.listbox.curselection()
+        if not selection:
             return
+        
+        sel = self.listbox.get(selection[0])
 
         cid = sel.split(" - ")[0]
         obj = session.query(CHO).filter_by(custom_id=cid).first()
@@ -56,20 +58,26 @@ class CHOPanel:
             self.load()
 
     def select(self, event):
-        if not self.listbox.curselection():
+        self.listbox.after(1, self._select)
+    
+    
+    def _select(self):
+        selection = self.listbox.curselection()
+        if not selection:
             return
-
-        idx = self.listbox.curselection()[0]
-        if idx >= len(self.chos):
-            return
-
-        cid = self.chos[idx].custom_id
-
+    
+        sel = self.listbox.get(selection[0])
+    
+        cid = sel.split(" - ")[0]
+    
+        # ✅ Set CHO selection
         self.state.current_cho = cid
         self.state.current_memory = None
-
+    
+        # ✅ Refresh metadata panel
         if hasattr(self.state, "metadata_panel"):
-            self.state.metadata_panel.show_cho_metadata_grouped(cid)
-
+            self.state.metadata_panel.refresh()
+    
+        # ✅ Update graph
         from features.graph import generate_graph
         generate_graph(self.state.graph_frame, self.state)
