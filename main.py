@@ -24,6 +24,8 @@ state.current_memory = None
 state.current_cho = None
 state.spans = []
 
+state.highlighted_memories = set()
+state.highlighted_cho = None
 
 # =========================
 # MAIN LAYOUT

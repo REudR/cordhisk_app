@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import simpledialog, messagebox
 from db import session, CHO
 from utils import load_list
-
+from services.selection_service import compute_links_for_cho
 
 class CHOPanel:
     def __init__(self, parent, state, label):
@@ -62,6 +62,8 @@ class CHOPanel:
     
     
     def _select(self):
+        from services.selection_service import compute_links_for_cho
+    
         selection = self.listbox.curselection()
         if not selection:
             return
@@ -70,14 +72,32 @@ class CHOPanel:
     
         cid = sel.split(" - ")[0]
     
-        # ✅ Set CHO selection
+        # ✅ Correct place to set highlighted state
+        self.state.highlighted_cho = cid
+        self.state.highlighted_memories = compute_links_for_cho(cid)
+    
+        # ✅ Update current selection
         self.state.current_cho = cid
         self.state.current_memory = None
     
-        # ✅ Refresh metadata panel
+        # ✅ Refresh other panels
+        if hasattr(self.state, "memory_panel"):
+            self.state.memory_panel.refresh_highlight()
+    
         if hasattr(self.state, "metadata_panel"):
             self.state.metadata_panel.refresh()
     
         # ✅ Update graph
         from features.graph import generate_graph
         generate_graph(self.state.graph_frame, self.state)
+
+    def refresh_highlight(self):
+        self.listbox.delete(0, tk.END)
+    
+        for c in session.query(CHO):
+            label = f"{c.custom_id} - {c.title}"
+    
+            if c.custom_id == getattr(self.state, "highlighted_cho", None):
+                label = "★ " + label
+    
+            self.listbox.insert(tk.END, label)

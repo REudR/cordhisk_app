@@ -3,11 +3,34 @@ import tkinter as tk
 from tkinter import ttk
 from services.types import MetadataType
 from services.metadata_schema import METADATA_FIELDS
+from services.metadata import extract_metadata
+from db import session, Memory
 
 RE_METADATA = re.compile(r'<(.*?) cho="(.*?)">(.*?)</\1>')
 RE_MEMORY_METADATA = re.compile(r'<(.*?) type="memory">(.*?)</\1>')
 RE_ANY_TAG = re.compile(r"<.*?>(.*?)</.*?>")
 RE_STRIP = re.compile(r"</?[^>]+>")
+
+def compute_links_for_cho(cid):
+    linked_memories = set()
+
+    for m in session.query(Memory):
+        for md in extract_metadata(m.text):
+            if md.get("type") == MetadataType.CHO.value and md.get("cho") == cid:
+                linked_memories.add(m.custom_id)
+
+    return linked_memories
+
+
+def compute_links_for_memory(memory):
+    cho_ids = set()
+
+    for md in extract_metadata(memory.text):
+        if md.get("type") == MetadataType.CHO.value:
+            if md.get("cho"):
+                cho_ids.add(md.get("cho"))
+
+    return cho_ids
 
 def field_to_alias(field):
     """Convert metadata field to user-friendly label"""

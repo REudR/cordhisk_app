@@ -8,8 +8,9 @@ from utils import load_list
 from services.types import MetadataType
 from services.file_service import copy_memory_file
 from services.metadata import extract_metadata, parse_text_and_spans
-from services.memory_service import rebuild_memory_text  # ✅ NEW
+from services.memory_service import rebuild_memory_text
 from ui.dialogs import ask_memory_full_form
+from services.selection_service import compute_links_for_memory
 
 
 class MemoryPanel:
@@ -26,7 +27,7 @@ class MemoryPanel:
         self.listbox.bind("<<ListboxSelect>>", self.select)
 
     # =========================
-    # EDIT MEMORY METADATA ✅ SIMPLIFIED
+    # EDIT MEMORY METADATA
     # =========================
     def edit_memory_metadata(self, event=None):
         m = self.state.current_memory
@@ -34,7 +35,6 @@ class MemoryPanel:
             messagebox.showwarning("No selection", "Select a memory first.")
             return
 
-        # read current file
         try:
             with open(m.file_path, encoding="utf-8", errors="replace") as f:
                 txt = f.read()
@@ -44,10 +44,8 @@ class MemoryPanel:
 
         txt = html.unescape(txt)
 
-        # extract existing metadata
         existing_memory_md = self.extract_memory_block_metadata(txt)
 
-        # open form
         form = ask_memory_full_form(
             initial_metadata=existing_memory_md,
             initial_id=m.custom_id,
@@ -59,10 +57,8 @@ class MemoryPanel:
 
         new_metadata = form["metadata"]
 
-        # ✅ CENTRALIZED REBUILD
         final_text = rebuild_memory_text(txt, new_metadata)
 
-        # update DB + file
         try:
             with open(m.file_path, "w", encoding="utf-8") as f:
                 f.write(final_text)
@@ -75,7 +71,6 @@ class MemoryPanel:
 
         session.commit()
 
-        # refresh UI
         self.editor.load(m)
 
         if hasattr(self.state, "metadata_panel"):
@@ -97,34 +92,50 @@ class MemoryPanel:
         )
 
     # =========================
-    # SELECT MEMORY
+    # SELECT (FIXED ✅)
     # =========================
     def select(self, event):
-        # ✅ delay execution so selection is updated
+        # ✅ ONLY trigger delayed handler
         self.listbox.after(1, self._select)
-    
-    
+
     def _select(self):
         selection = self.listbox.curselection()
         if not selection:
             return
-    
+
         sel = self.listbox.get(selection[0])
-    
-        mid = sel.split(" - ")[0]
+        mid = sel.replace("★ ", "").split(" - ")[0]
+
+        # ✅ MUST FETCH m FIRST
         m = session.query(Memory).filter_by(custom_id=mid).first()
-    
-        if m:
-            self.state.current_memory = m
-            self.state.current_cho = None
-    
-            self.editor.load(m)
-    
-            if hasattr(self.state, "metadata_panel"):
-                self.state.metadata_panel.refresh()
-    
-            from features.graph import generate_graph
-            generate_graph(self.state.graph_frame, self.state)
+        if not m:
+            return
+
+        # ✅ highlight logic
+        self.state.highlighted_memories = {m.custom_id}
+        self.state.highlighted_cho = None
+
+        cho_ids = compute_links_for_memory(m)
+
+        if len(cho_ids) == 1:
+            self.state.highlighted_cho = list(cho_ids)[0]
+
+        # ✅ update current state
+        self.state.current_memory = m
+        self.state.current_cho = None
+
+        # ✅ update UI
+        self.editor.load(m)
+
+        if hasattr(self.state, "cho_panel"):
+            self.state.cho_panel.refresh_highlight()
+
+        if hasattr(self.state, "metadata_panel"):
+            self.state.metadata_panel.refresh()
+
+        # ✅ update graph
+        from features.graph import generate_graph
+        generate_graph(self.state.graph_frame, self.state)
 
     # =========================
     # EXTRACT MEMORY BLOCK
@@ -132,14 +143,13 @@ class MemoryPanel:
     def extract_memory_block_metadata(self, text):
         from services.metadata import COMBINED_RE
 
-        block_pattern = r'===\s*MEMORY METADATA START\s*===(.*?)===\s*MEMORY METADATA END\s*==='
-        match = re.search(block_pattern, text or "", re.DOTALL)
+        pattern = r'===\s*MEMORY METADATA START\s*===(.*?)===\s*MEMORY METADATA END\s*==='
+        match = re.search(pattern, text or "", re.DOTALL)
 
         metadata = {}
 
         if match:
             block = match.group(1)
-
             for m in COMBINED_RE.finditer(block):
                 if m.group("type") == "memory":
                     metadata[m.group("field")] = m.group("value")
@@ -147,7 +157,7 @@ class MemoryPanel:
         return metadata
 
     # =========================
-    # IMPORT FILE ✅ CLEANED
+    # IMPORT FILE
     # =========================
     def import_file(self):
         path = filedialog.askopenfilename()
@@ -185,7 +195,6 @@ class MemoryPanel:
 
         new_path = copy_memory_file(path, mid)
 
-        # ✅ CENTRALIZED REBUILD
         final_text = rebuild_memory_text(txt, metadata)
 
         m = Memory(
@@ -199,6 +208,7 @@ class MemoryPanel:
         session.commit()
 
         self.load()
+
         self.state.current_memory = m
         self.state.current_cho = None
 
@@ -217,10 +227,10 @@ class MemoryPanel:
         selection = self.listbox.curselection()
         if not selection:
             return
-        
-        sel = self.listbox.get(selection[0])
 
+        sel = self.listbox.get(selection[0])
         mid = sel.split(" - ")[0]
+
         m = session.query(Memory).filter_by(custom_id=mid).first()
 
         if m and messagebox.askyesno("Delete", f"Delete {mid}?"):
@@ -231,4 +241,19 @@ class MemoryPanel:
 
             session.delete(m)
             session.commit()
+
             self.load()
+
+    # =========================
+    # HIGHLIGHT RENDERING
+    # =========================
+    def refresh_highlight(self):
+        self.listbox.delete(0, tk.END)
+    
+        for m in session.query(Memory):
+            label = f"{m.custom_id} - {m.title}"
+            # ✅ highlight with star instead of color
+            if m.custom_id in getattr(self.state, "highlighted_memories", set()):
+                label = "★ " + label
+    
+            self.listbox.insert(tk.END, label)
