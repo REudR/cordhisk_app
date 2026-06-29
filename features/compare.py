@@ -7,7 +7,6 @@ def compare(cho_id):
 
     for m in session.query(Memory):
         for md in extract_metadata(m.text):
-            # ✅ FIX: Only show CHO-linked metadata, filter out memory-intrinsic
             if md.get("type") == MetadataType.CHO.value and md.get("cho") == cho_id:
                 tree.insert("", "end",
                     values=(m.custom_id, md["field"], md["value"]))

@@ -38,13 +38,8 @@ def field_to_alias(field):
     if not field:
         return ""
 
-    # Remove namespace
     name = field.split(":")[-1]
-
-    # Split camelCase
     name = re.sub(r"([a-z])([A-Z])", r"\1 \2", name)
-
-    # Replace underscores
     name = name.replace("_", " ")
 
     return name.capitalize()
@@ -62,7 +57,6 @@ def get_all_fields_by_type(metadata_type):
     """Return all fields for a given metadata type (MEMORY or CHO)"""
     fields = []
     for config in METADATA_FIELDS.values():
-        # ✅ FIX: compare values instead of enum objects
         if config["type"].value == metadata_type.value:
             fields.extend(config["fields"].keys())
     return fields

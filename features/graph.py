@@ -51,7 +51,7 @@ def get_node_style(node, node_types, node_data, state):
 
 
 # =========================
-# LABEL BUILDER ✅ NEW CLEAN
+# LABEL BUILDER 
 # =========================
 def build_labels(G, node_types, node_data, node_counts, cho_cache):
     labels = {}
@@ -246,7 +246,6 @@ def generate_graph(frame, state):
 
     nx.draw_networkx_edges(G, pos, width=1.2, alpha=0.5, ax=ax)
 
-    # ✅ LABELS (clean + working)
     labels = build_labels(G, node_types, node_data, node_counts, cho_cache)
 
     nx.draw_networkx_labels(G, pos, labels=labels, font_size=7, ax=ax)
@@ -303,7 +302,7 @@ def generate_graph(frame, state):
     fig.canvas.mpl_connect("button_press_event", on_click)
 
     # =========================
-    # TOOLTIP ✅ RESTORED
+    # TOOLTIP 
     # =========================
     tooltip = ax.annotate(
         "",
@@ -323,8 +322,6 @@ def generate_graph(frame, state):
         for node, (x, y) in pos.items():
             if abs(event.xdata - x) < 0.05 and abs(event.ydata - y) < 0.05:
 
-                # ✅ ONLY metadata nodes show tooltip
-                if node_types[node] in ["memory_metadata", "cho_metadata"]:
                     data = node_data[node]
 
                     tooltip.xy = (x, y)
@@ -335,7 +332,6 @@ def generate_graph(frame, state):
                     fig.canvas.draw_idle()
                     return
 
-        # ✅ hide tooltip if nothing matched
         tooltip.set_visible(False)
         fig.canvas.draw_idle()
 

@@ -30,14 +30,12 @@ class Memory(Base):
 
 
 # =========================
-# PATH SETUP ✅ UPDATED
+# PATH SETUP 
 # =========================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ✅ Use memory_files instead of memories
 MEMORY_DIR = os.path.join(BASE_DIR, "memory_files")
 
-# ✅ Ensure folder exists
 os.makedirs(MEMORY_DIR, exist_ok=True)
 
 DB_PATH = os.path.join(MEMORY_DIR, "000_cordhisk.db")

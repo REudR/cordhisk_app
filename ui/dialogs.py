@@ -7,16 +7,14 @@ def ask_memory_full_form(initial_metadata=None, initial_id=None, parent=None):
     initial = initial_metadata or {}
     result = {}
 
-    # ✅ FIX: Only create & hide root if absolutely necessary
     if parent is not None:
         root = parent
     else:
         root = tk._default_root
         if root is None:
             root = tk.Tk()
-            root.withdraw()  # ✅ only hide if we created it
+            root.withdraw()  
 
-    # ✅ Create dialog
     win = tk.Toplevel(root)
     win.title("Memory")
     win.transient(root)
@@ -115,7 +113,6 @@ def ask_memory_full_form(initial_metadata=None, initial_id=None, parent=None):
         row=len(fields), column=1, padx=5, pady=5
     )
 
-    # ✅ Wait for dialog to close
     win.wait_window()
 
     return result if result else None

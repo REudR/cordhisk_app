@@ -15,13 +15,11 @@ class Editor:
         self.state = state
         self.loading = False
 
-        # ✅ Font (readability)
         self.font = tkFont.Font(family="Helvetica", size=12)
 
-        # ✅ SINGLE Text widget (FIXED — no duplication!)
         self.text = tk.Text(
             parent,
-            wrap=tk.WORD,      # ✅ Proper word wrapping
+            wrap=tk.WORD,    
             font=self.font,
             padx=10,
             pady=10,
@@ -29,15 +27,13 @@ class Editor:
         )
         self.text.pack(fill="both", expand=True)
 
-        # ✅ Highlight styles
         self.text.tag_config("memory_meta", background="#a1d99b")
         self.text.tag_config("cho_meta", background="#cce5ff")
 
-        # ✅ Change tracking
         self.text.bind("<<Modified>>", self.on_change)
 
     # =========================
-    # TEXT NORMALIZATION ✅ NEW
+    # TEXT NORMALIZATION
     # =========================
     def prepare_text(self, text):
         if not text:
@@ -71,7 +67,7 @@ class Editor:
             self.text.edit_modified(False)
 
     # =========================
-    # LOAD MEMORY ✅ FIXED
+    # LOAD MEMORY 
     # =========================
     def load(self, memory):
         self.state.current_memory = memory
@@ -79,7 +75,6 @@ class Editor:
 
         text = memory.text or ""
 
-        # ✅ CLEAN TEXT BEFORE PARSING (important)
         text = self.prepare_text(text)
 
         clean, spans = parse_text_and_spans(text)
@@ -110,7 +105,6 @@ class Editor:
 
         m.text = final
 
-        # ✅ update title safely
         if "dc:title" in metadata:
             m.title = metadata["dc:title"]
 

@@ -71,7 +71,7 @@ class MetadataPanel:
         tk.Button(btns, text="Save", command=editor.save).pack(side="left")
 
     # =========================
-    # REFRESH (ONLY FROM SPANS ✅)
+    # REFRESH (ONLY FROM SPANS)
     # =========================
     def refresh(self):
         self.memory_tree.delete(*self.memory_tree.get_children())
@@ -96,17 +96,15 @@ class MetadataPanel:
                 self.cho_row_map[item] = span
 
     # =========================
-    # REBUILD BLOCK + SAVE ✅
+    # REBUILD BLOCK + SAVE
     # =========================
     def rebuild_and_save(self):
         memory = self.state.current_memory
         if not memory:
             return
 
-        # ✅ use editor.save() → ensures file sync
         self.editor.save()
 
-        # ✅ reload to re-parse cleanly
         self.editor.load(memory)
 
     # =========================
@@ -167,22 +165,19 @@ class MetadataPanel:
         cho_box.pack()
     
         # =========================
-        # FIELD (ALIASES + CATEGORY ✅)
+        # FIELD (ALIASES + CATEGORY )
         # =========================
 
         tk.Label(dialog, text="Field").pack()
 
-        # ✅ Get all CHO-related fields
         fields = get_all_fields_by_type(MetadataType.CHO)
         
-        # ✅ Convert to user-friendly display
         displays = [field_to_display(f) for f in fields]
         
         field_box = ttk.Combobox(dialog, values=displays)
-        field_box["state"] = "readonly"   # ✅ important for correct rendering
+        field_box["state"] = "readonly"   
         field_box.pack()
         
-        # ✅ Optional default selection
         if displays:
             field_box.set(displays[0])
     
@@ -229,23 +224,19 @@ class MetadataPanel:
     # EDIT MEMORY
     # =========================
     def edit_memory_metadata(self, event=None):
-        # ✅ If user clicked "+ Memory Meta", delegate to full editor
         if event is None:
             if hasattr(self.state, "memory_panel"):
                 self.state.memory_panel.edit_memory_metadata()
             return
     
-        # ✅ Get clicked row from Treeview
         item = self.memory_tree.identify_row(event.y)
         if not item:
             return
     
-        # ✅ Retrieve span from mapping
         span = self.memory_row_map.get(item)
         if not span:
             return
     
-        # ✅ Create dialog
         dialog = tk.Toplevel(self.memory_tree)
         dialog.transient(self.memory_tree)
         dialog.grab_set()

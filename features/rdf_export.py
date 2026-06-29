@@ -148,7 +148,6 @@ def _export_cho_single_memory(cho):
     mem_uri = f"http://example.org/memory/{memory.custom_id}"
     contains = False
 
-    # ✅ separator
     cho_desc.append(ET.Comment("========================================"))
     cho_desc.append(ET.Comment(
         f" MEMORY | ID: {memory.custom_id} | Title: {memory.title or 'N/A'} "
@@ -171,7 +170,6 @@ def _export_cho_single_memory(cho):
                 ET.SubElement(cho_desc, field).text = value
                 ET.SubElement(block, field).text = value
 
-    # embedded WebResource ✅
     web = ET.SubElement(block, "edm:WebResource")
 
     if memory.title:
@@ -226,7 +224,6 @@ def _export_cho_all_memories(cho):
 
         contains = False
 
-        # ✅ separator block
         cho_desc.append(ET.Comment("========================================"))
         cho_desc.append(ET.Comment(
             f" MEMORY | ID: {memory.custom_id} | Title: {memory.title or 'N/A'} "

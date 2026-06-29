@@ -22,6 +22,7 @@ def center_window(root, width=1600, height=800):
 # =========================
 # ROOT + STATE
 # =========================
+
 root = tk.Tk()
 root.title("CORDHISK - Community-Driven Cultural Heritage Metadata Manager - Rafael Ramirez Eudave, TU Delft, 2026")
 root.update_idletasks()
@@ -39,9 +40,9 @@ state.highlighted_cho = None
 # =========================
 # MAIN LAYOUT
 # =========================
+
 main_pane = tk.PanedWindow(root, orient=tk.HORIZONTAL, sashwidth=4)
 main_pane.pack(fill="both", expand=True)
-
 
 # =========================
 # SIDEBAR (25%)
@@ -61,10 +62,10 @@ middle = tk.Frame(sidebar, width=165)
 middle.pack(side="left", fill="y")
 middle.pack_propagate(False)
 
-
 # =========================
 # RIGHT SIDE
 # =========================
+
 right_container = tk.PanedWindow(main_pane, orient=tk.HORIZONTAL, sashwidth=4)
 main_pane.add(right_container)
 
@@ -76,10 +77,10 @@ right_container.add(graph_frame)
 
 state.graph_frame = graph_frame
 
-
 # =========================
 # UI COMPONENTS
 # =========================
+
 editor = Editor(right, state)
 
 cho_panel = CHOPanel(left, state, None)
@@ -90,10 +91,10 @@ state.memory_panel = memory_panel
 metadata_panel = MetadataPanel(right, state, editor)
 state.metadata_panel = metadata_panel
 
-
 # =========================
 # BUTTON BAR
 # =========================
+
 bar = tk.Frame(right)
 bar.pack(fill="x", pady=5)
 
@@ -116,37 +117,25 @@ tk.Button(row1, text="Mem. RDF",
     command=lambda: export_memory_rdf(state.current_memory)
 ).pack(side="left", padx=3)
 
-
 # =========================
 # INIT
 # =========================
+
 cho_panel.load()
 memory_panel.load()
 
-
-# =========================
-# APPLY EXACT PROPORTIONS ✅
-# =========================
 def apply_layout():
     total_w = root.winfo_width()
 
-    # ✅ Sidebar = 25%
     sidebar_w = int(total_w * 0.25)
     main_pane.sash_place(0, sidebar_w, 0)
-    
-    # ✅ Right container width
     right_w = total_w - sidebar_w
-
-    # ✅ Editor = 27.5% overall → 36.67% of right side
     editor_ratio = 0.275 / 0.75  # ≈ 0.3667
     editor_w = int(right_w * editor_ratio)
-
     right_container.sash_place(0, editor_w, 0)
 
-# ✅ Apply after UI ready
 root.update_idletasks()
 apply_layout()
-
 
 # =========================
 # RUN

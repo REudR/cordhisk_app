@@ -92,10 +92,9 @@ class MemoryPanel:
         )
 
     # =========================
-    # SELECT (FIXED ✅)
+    # SELECT
     # =========================
     def select(self, event):
-        # ✅ ONLY trigger delayed handler
         self.listbox.after(1, self._select)
 
     def _select(self):
@@ -106,12 +105,10 @@ class MemoryPanel:
         sel = self.listbox.get(selection[0])
         mid = sel.replace("★ ", "").split(" - ")[0]
 
-        # ✅ MUST FETCH m FIRST
         m = session.query(Memory).filter_by(custom_id=mid).first()
         if not m:
             return
 
-        # ✅ highlight logic
         self.state.highlighted_memories = {m.custom_id}
         self.state.highlighted_cho = None
 
@@ -120,11 +117,9 @@ class MemoryPanel:
         if len(cho_ids) == 1:
             self.state.highlighted_cho = list(cho_ids)[0]
 
-        # ✅ update current state
         self.state.current_memory = m
         self.state.current_cho = None
 
-        # ✅ update UI
         self.editor.load(m)
 
         if hasattr(self.state, "cho_panel"):
@@ -133,7 +128,6 @@ class MemoryPanel:
         if hasattr(self.state, "metadata_panel"):
             self.state.metadata_panel.refresh()
 
-        # ✅ update graph
         from features.graph import generate_graph
         generate_graph(self.state.graph_frame, self.state)
 
@@ -252,7 +246,6 @@ class MemoryPanel:
     
         for m in session.query(Memory):
             label = f"{m.custom_id} - {m.title}"
-            # ✅ highlight with star instead of color
             if m.custom_id in getattr(self.state, "highlighted_memories", set()):
                 label = "★ " + label
     

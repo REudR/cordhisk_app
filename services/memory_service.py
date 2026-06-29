@@ -37,7 +37,7 @@ def remove_memory_block(text):
 
 
 # =========================
-# BUILD MEMORY BLOCK ✅ (centralized)
+# BUILD MEMORY BLOCK 
 # =========================
 def build_memory_block(metadata):
     lines = [
@@ -97,7 +97,7 @@ def build_spans(clean_text, memory_md, cho_md):
     return spans
 
 # =========================
-# FULL REBUILD PIPELINE ✅
+# FULL REBUILD PIPELINE 
 # =========================
 def rebuild_memory_text(original_text, new_metadata):
 
@@ -129,10 +129,8 @@ def rebuild_memory_text(original_text, new_metadata):
 def rebuild_from_spans(clean_text, spans):
     from collections import OrderedDict
 
-    # ✅ Rebuild inline tags
     content = rebuild_text_from_spans(clean_text, spans)
 
-    # ✅ Extract MEMORY metadata from spans
     metadata = OrderedDict()
     for s in spans:
         if s.get("type") == MetadataType.MEMORY.value:
@@ -142,8 +140,6 @@ def rebuild_from_spans(clean_text, spans):
             if field and value:
                 metadata[field] = value  # automatic dedup
 
-    # ✅ Build block
     block = build_memory_block(metadata)
 
-    # ✅ Final result
     return block + content.lstrip("\n"), metadata

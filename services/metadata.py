@@ -32,7 +32,7 @@ def build_rdf_block(metadata):
 
 
 # =========================
-# PARSE TEXT + SPANS ✅ CLEAN
+# PARSE TEXT + SPANS 
 # =========================
 def parse_text_and_spans(text):
     if not text:
@@ -122,7 +122,7 @@ def parse_text_and_spans(text):
 
 
 # =========================
-# EXTRACT METADATA ✅ CLEAN
+# EXTRACT METADATA 
 # =========================
 def extract_metadata(text):
     if not text:
