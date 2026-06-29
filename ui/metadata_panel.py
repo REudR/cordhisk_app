@@ -56,7 +56,7 @@ class MetadataPanel:
             self.cho_tree.heading(col, text=col)
             self.cho_tree.column("CHO", width=80, stretch=False)
             self.cho_tree.column("Field", width=120, stretch=False)
-            self.cho_tree.column("Value", width=300, stretch=True)
+            self.cho_tree.column("Value", width=150, stretch=True)
 
         self.cho_tree.pack(fill="both", expand=True)
         self.cho_tree.bind("<Double-1>", self.edit_cho_metadata)
@@ -162,7 +162,7 @@ class MetadataPanel:
     
         cho_box = ttk.Combobox(
             dialog,
-            values=[c.custom_id for c in session.query(CHO)]
+            values=[f"{c.custom_id} - {c.title}" for c in session.query(CHO)]
         )
         cho_box.pack()
     
@@ -203,7 +203,8 @@ class MetadataPanel:
                 messagebox.showerror("Error", "Invalid field")
                 return
     
-            cho = cho_box.get()
+            cho_raw = cho_box.get()
+            cho = cho_raw.split(" - ")[0] if " - " in cho_raw else cho_raw
             if not cho:
                 messagebox.showerror("Error", "Select a CHO")
                 return

@@ -1,10 +1,12 @@
 import tkinter as tk
 import re
+import html
 from tkinter import messagebox
+import tkinter.font as tkFont
 
 from db import session
 from services.metadata import parse_text_and_spans
-from services.memory_service import rebuild_from_spans  # ✅ NEW
+from services.memory_service import rebuild_from_spans
 from services.types import MetadataType
 
 
@@ -13,13 +15,50 @@ class Editor:
         self.state = state
         self.loading = False
 
-        self.text = tk.Text(parent)
+        # ✅ Font (readability)
+        self.font = tkFont.Font(family="Helvetica", size=12)
+
+        # ✅ SINGLE Text widget (FIXED — no duplication!)
+        self.text = tk.Text(
+            parent,
+            wrap=tk.WORD,      # ✅ Proper word wrapping
+            font=self.font,
+            padx=10,
+            pady=10,
+            undo=True
+        )
         self.text.pack(fill="both", expand=True)
 
+        # ✅ Highlight styles
         self.text.tag_config("memory_meta", background="#a1d99b")
         self.text.tag_config("cho_meta", background="#cce5ff")
 
+        # ✅ Change tracking
         self.text.bind("<<Modified>>", self.on_change)
+
+    # =========================
+    # TEXT NORMALIZATION ✅ NEW
+    # =========================
+    def prepare_text(self, text):
+        if not text:
+            return ""
+
+        # decode HTML
+        text = html.unescape(text)
+
+        # fix non-breaking spaces
+        text = text.replace("\u00A0", " ")
+
+        # remove RDF blocks safely
+        text = re.sub(r'<rdf:RDF.*?</rdf:RDF>', '', text, flags=re.DOTALL)
+
+        # fix broken line breaks inside words
+        text = re.sub(r'(\w)\n(\w)', r'\1 \2', text)
+
+        # normalize spaces
+        text = re.sub(r' +', ' ', text)
+
+        return text
 
     # =========================
     # TEXT CHANGE HANDLER
@@ -32,7 +71,7 @@ class Editor:
             self.text.edit_modified(False)
 
     # =========================
-    # LOAD MEMORY
+    # LOAD MEMORY ✅ FIXED
     # =========================
     def load(self, memory):
         self.state.current_memory = memory
@@ -40,7 +79,8 @@ class Editor:
 
         text = memory.text or ""
 
-        text = re.sub(r'<rdf:RDF.*?</rdf:RDF>', '', text, flags=re.DOTALL)
+        # ✅ CLEAN TEXT BEFORE PARSING (important)
+        text = self.prepare_text(text)
 
         clean, spans = parse_text_and_spans(text)
         self.state.spans = spans
@@ -56,7 +96,7 @@ class Editor:
             self.state.metadata_panel.refresh()
 
     # =========================
-    # SAVE MEMORY ✅ SIMPLIFIED
+    # SAVE MEMORY
     # =========================
     def save(self):
         m = self.state.current_memory
@@ -66,7 +106,6 @@ class Editor:
         txt = self.text.get("1.0", tk.END)
         spans = list(self.state.spans)
 
-        # ✅ CENTRALIZED REBUILD
         final, metadata = rebuild_from_spans(txt, spans)
 
         m.text = final
