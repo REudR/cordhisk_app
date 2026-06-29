@@ -10,13 +10,22 @@ from features.compare import compare
 from features.search import search
 from features.rdf_export import export_cho_rdf, export_memory_rdf
 
+def center_window(root, width=1600, height=800):
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+
+    x = int((screen_width / 2) - (width / 2))
+    y = int((screen_height / 2) - (height / 2))
+
+    root.geometry(f"{width}x{height}+{x}+{y}")
 
 # =========================
 # ROOT + STATE
 # =========================
 root = tk.Tk()
 root.title("CORDHISK - Community-Driven Cultural Heritage Metadata Manager - Rafael Ramirez Eudave, TU Delft, 2026")
-root.geometry("1600x800")
+root.update_idletasks()
+center_window(root, 1600, 800)
 
 state = AppState()
 state.root = root
