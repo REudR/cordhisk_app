@@ -228,29 +228,49 @@ class MetadataPanel:
     # EDIT MEMORY
     # =========================
     def edit_memory_metadata(self, event=None):
-        if hasattr(self.state, "memory_panel"):
-            self.state.memory_panel.edit_memory_metadata()
-
-        dialog = tk.Toplevel()
-
-        field_box = ttk.Combobox(dialog,
-            values=METADATA_FIELDS["WebResource"]["fields"])
-        field_box.set(span["field"])
+        # ✅ If user clicked "+ Memory Meta", delegate to full editor
+        if event is None:
+            if hasattr(self.state, "memory_panel"):
+                self.state.memory_panel.edit_memory_metadata()
+            return
+    
+        # ✅ Get clicked row from Treeview
+        item = self.memory_tree.identify_row(event.y)
+        if not item:
+            return
+    
+        # ✅ Retrieve span from mapping
+        span = self.memory_row_map.get(item)
+        if not span:
+            return
+    
+        # ✅ Create dialog
+        dialog = tk.Toplevel(self.memory_tree)
+        dialog.transient(self.memory_tree)
+        dialog.grab_set()
+    
+        field_box = ttk.Combobox(
+            dialog,
+            values=METADATA_FIELDS["WebResource"]["fields"]
+        )
+        field_box.set(span.get("field", ""))
         field_box.pack()
-
+    
         val = tk.Entry(dialog)
-        val.insert(0, span["value"])
+        val.insert(0, span.get("value", ""))
         val.pack()
-
+    
         def submit():
             span["field"] = field_box.get()
             span["value"] = val.get()
-
+    
             self.rebuild_and_save()
             self.refresh()
             dialog.destroy()
-
+    
         tk.Button(dialog, text="Save", command=submit).pack()
+        tk.Button(dialog, text="Cancel", command=dialog.destroy).pack()
+
 
     # =========================
     # EDIT CHO
