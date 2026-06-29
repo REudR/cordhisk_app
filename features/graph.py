@@ -1,84 +1,136 @@
 import networkx as nx
 import matplotlib.pyplot as plt
-import random
 from collections import defaultdict
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.patches import Patch
-from tkinter import messagebox
+from tkinter import messagebox, Frame
 
 from db import session, Memory, CHO
 from services.metadata import extract_metadata, get_memory_title
-from utils import MetadataType
-
-from tkinter import Frame, Button
-
-
+from services.types import MetadataType
 
 
 # =========================
-# METADATA TYPE COLORS
+# COLOR LOGIC
 # =========================
-def get_metadata_color(metadata_type, field):
-    if metadata_type == MetadataType.MEMORY.value:
-        return "#a1d99b"
-    else:
-        if field.startswith("dc:") or field.startswith("dcterms:"):
-            return "#ffcc66"
-        elif field.startswith("oaf:") or field.startswith("rdaGr2:"):
-            return "#66b3ff"
+def get_metadata_color(field):
+    if field.startswith("dc:") or field.startswith("dcterms:"):
+        return "#ffcc66"
+    elif field.startswith("oaf:") or field.startswith("rdaGr2:"):
+        return "#66b3ff"
+    return "#cccccc"
+
+
+# =========================
+# NODE STYLE
+# =========================
+def get_node_style(node, node_types, node_data, state):
+    t = node_types[node]
+
+    if t == "memory":
+        mem_id = node.split(":")[1]
+        expanded = mem_id in state.expanded_memories
+        return (
+            "#3182bd" if expanded else "#9ecae1",
+            "s",
+            1200,
+            "black" if not expanded else "none"
+        )
+
+    if t == "cho":
+        return "#66c2a5", "o", 1800, "none"
+
+    if t == "memory_metadata":
+        return "#a1d99b", "h", 500, "none"
+
+    if t == "cho_metadata":
+        field = node_data[node].get("field", "")
+        return get_metadata_color(field), "h", 500, "none"
+
+    return "grey", "o", 500, "none"
+
+
+# =========================
+# LABEL BUILDER ✅ NEW CLEAN
+# =========================
+def build_labels(G, node_types, node_data, node_counts, cho_cache):
+    labels = {}
+
+    def wrap_text(text, max_len=18):
+        words = text.split()
+        lines = []
+        current = ""
+
+        for w in words:
+            if len(current) + len(w) + 1 > max_len:
+                lines.append(current)
+                current = w
+            else:
+                current = f"{current} {w}".strip()
+
+        if current:
+            lines.append(current)
+
+        return "\n".join(lines)
+
+    for node in G.nodes:
+        t = node_types[node]
+        d = node_data[node]
+
+        if t == "memory":
+            mem_id = d.custom_id
+            title = get_memory_title(d.text, d.custom_id)
+            labels[node] = f"{mem_id}\n{wrap_text(title)}"
+
+        elif t == "cho":
+            cid = d
+            title = cho_cache.get(cid, str(cid))
+            labels[node] = f"{cid}\n{wrap_text(title)}"
+
         else:
-            return "#cccccc"
+            field = d.get("field", "").split(":")[-1]
+            count = node_counts.get(node, 0)
+            labels[node] = f"{field} ({count})" if count > 1 else field
+
+    return labels
 
 
 # =========================
-# MAIN GRAPH FUNCTION
+# MAIN GRAPH
 # =========================
 def generate_graph(frame, state):
 
-    if not hasattr(state, "expanded_memories"):
-        state.expanded_memories = set()
-
-    if not hasattr(state, "show_memory_metadata"):
-        state.show_memory_metadata = True
+    state.expanded_memories = getattr(state, "expanded_memories", set())
+    state.show_memory_metadata = getattr(state, "show_memory_metadata", True)
 
     if not state.current_cho and not state.current_memory:
         messagebox.showinfo("Info", "Select CHO or Memory first")
         return
-    
-    # =========================
-    # CLEANUP (FIXED)
-    # =========================
-        
-    if hasattr(state, "control_frame") and state.control_frame:
+
+    if getattr(state, "control_frame", None):
         state.control_frame.destroy()
-        state.control_frame = None
 
-    if state.canvas:
+    if getattr(state, "canvas", None):
         state.canvas.get_tk_widget().destroy()
-        state.canvas = None
 
-    if hasattr(state, "toolbar") and state.toolbar:
+    if getattr(state, "toolbar", None):
         state.toolbar.destroy()
-        state.toolbar = None
 
     G = nx.Graph()
     node_types = {}
     node_data = {}
     node_counts = defaultdict(int)
 
-    # =========================
-    # MEMORY VIEW
-    # =========================
-    if state.current_memory:
-        m = state.current_memory
-        mn = f"memory:{m.custom_id}"
+    cho_cache = {c.custom_id: c.title for c in session.query(CHO)}
 
-        G.add_node(mn)
-        node_types[mn] = "memory"
-        node_data[mn] = m
+    def add_node(n, ntype, data):
+        if n not in node_types:
+            G.add_node(n)
+            node_types[n] = ntype
+            node_data[n] = data
 
-        for md in extract_metadata(m.text):
-
+    def add_metadata(mn, metadata):
+        for md in metadata:
             key = f"{md.get('field')}::{md.get('value')}"
 
             if md.get("type") == MetadataType.MEMORY.value:
@@ -86,180 +138,99 @@ def generate_graph(frame, state):
                 if not state.show_memory_metadata:
                     continue
 
-                if str(m.custom_id) not in state.expanded_memories:
+                mem_id = mn.split(":")[1]
+                if mem_id not in state.expanded_memories:
                     continue
 
-                mmd_node = f"memory_metadata:{key}"
+                node = f"memory_metadata:{key}"
+                G.add_edge(mn, node)
 
-                G.add_edge(mn, mmd_node)
-                node_types[mmd_node] = "memory_metadata"
-                node_data[mmd_node] = md
-                node_counts[mmd_node] += 1
+                add_node(node, "memory_metadata", md)
+                node_counts[node] += 1
 
-            else:
-                cn = f"CHO:{md.get('cho')}"
-                cmd_node = f"cho_metadata:{key}"
+            elif md.get("type") == MetadataType.CHO.value:
 
-                G.add_edges_from([(mn, cmd_node), (cmd_node, cn)])
+                cho_id = md.get("cho")
+                if not cho_id:
+                    continue
 
-                node_types[cn] = "cho"
-                node_data[cn] = md.get("cho")
+                cn = f"CHO:{cho_id}"
+                node = f"cho_metadata:{key}"
 
-                node_types[cmd_node] = "cho_metadata"
-                node_data[cmd_node] = md
-                node_counts[cmd_node] += 1
+                G.add_edges_from([(mn, node), (node, cn)])
 
-    # =========================
+                add_node(node, "cho_metadata", md)
+                add_node(cn, "cho", cho_id)
+
+                node_counts[node] += 1
+
+    # MEMORY VIEW
+    if state.current_memory:
+        m = state.current_memory
+        mn = f"memory:{m.custom_id}"
+
+        add_node(mn, "memory", m)
+        add_metadata(mn, extract_metadata(m.text))
+
     # CHO VIEW
-    # =========================
     else:
         cid = state.current_cho
         cn = f"CHO:{cid}"
 
-        G.add_node(cn)
-        node_types[cn] = "cho"
-        node_data[cn] = cid
+        add_node(cn, "cho", cid)
 
         for m in session.query(Memory):
+            md_list = extract_metadata(m.text)
 
-            memory_connected = False
-            memory_md = []
-            cho_md = []
+            cho_md = [md for md in md_list if md.get("cho") == cid]
+            memory_md = [md for md in md_list if md.get("type") == MetadataType.MEMORY.value]
 
-            for md in extract_metadata(m.text):
-                if md.get("type") == MetadataType.MEMORY.value:
-                    memory_md.append(md)
-                elif md.get("cho") == cid:
-                    memory_connected = True
-                    cho_md.append(md)
-
-            if not memory_connected:
+            if not cho_md:
                 continue
 
             mn = f"memory:{m.custom_id}"
+            add_node(mn, "memory", m)
 
-            G.add_node(mn)
-            node_types[mn] = "memory"
-            node_data[mn] = m
+            add_metadata(mn, cho_md)
 
-            for md in cho_md:
-                key = f"{md.get('field')}::{md.get('value')}"
-                cmd_node = f"cho_metadata:{key}"
-
-                G.add_edges_from([(mn, cmd_node), (cmd_node, cn)])
-
-                node_types[cmd_node] = "cho_metadata"
-                node_data[cmd_node] = md
-                node_counts[cmd_node] += 1
-
-            for md in memory_md:
-                if not state.show_memory_metadata:
-                    continue
-
-                if str(m.custom_id) not in state.expanded_memories:
-                    continue
-
-                key = f"{md.get('field')}::{md.get('value')}"
-                mmd_node = f"memory_metadata:{key}"
-
-                G.add_edge(mn, mmd_node)
-                node_types[mmd_node] = "memory_metadata"
-                node_data[mmd_node] = md
-                node_counts[mmd_node] += 1
+            if state.show_memory_metadata and str(m.custom_id) in state.expanded_memories:
+                add_metadata(mn, memory_md)
 
     if not G.nodes:
         messagebox.showinfo("Info", "No data to display")
         return
 
-    # =========================
     # LAYOUT
-    # =========================
+    pos = {}
+    layers = {"memory": [], "metadata": [], "cho": []}
 
-    pos = nx.spring_layout(G, k=1.8, iterations=150, seed=42)
-    
-    # ✅ group nodes by type
-    layers = {
-        "memory": [],
-        "metadata": [],
-        "cho": []
-    }
-    
     for node in G.nodes:
-        ntype = node_types[node]
-    
-        if ntype == "memory":
+        t = node_types[node]
+        if t == "memory":
             layers["memory"].append(node)
-        elif ntype in ["memory_metadata", "cho_metadata"]:
-            layers["metadata"].append(node)
-        elif ntype == "cho":
+        elif t == "cho":
             layers["cho"].append(node)
-    
-    # ✅ assign positions with spacing
-    def distribute(nodes, x_pos):
+        else:
+            layers["metadata"].append(node)
+
+    def distribute(nodes, x):
         n = len(nodes)
-        if n == 0:
-            return
-    
-        spacing = 4 / max(n, 1)  # controls vertical distance
-    
         for i, node in enumerate(nodes):
-            y = (i - n / 2) * spacing
-            pos[node] = (
-                x_pos + random.uniform(-0.05, 0.05),
-                y + random.uniform(-0.05, 0.05)
-            )
-    
-    # ✅ apply layers
+            pos[node] = (x, (i - n / 2))
+
     distribute(layers["memory"], -2)
     distribute(layers["metadata"], 0)
     distribute(layers["cho"], 2)
 
-    # =========================
     # DRAW
-    # =========================
-    
     fig = plt.Figure(figsize=(14, 9))
-    
-    # ✅ REMOVE INTERNAL MARGINS
     fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-    
+
     ax = fig.add_subplot(111)
-    
-    # ✅ HIDE AXES / FRAME
     ax.set_axis_off()
 
     for node in G.nodes:
-        ntype = node_types[node]
-
-        edgecolor = "none"
-
-        if ntype == "memory":
-            mem_id = node.split(":")[1]
-            expanded = mem_id in state.expanded_memories
-            color = "#3182bd" if expanded else "#9ecae1"
-
-            if not expanded:
-                edgecolor = "black"
-
-        elif ntype == "memory_metadata":
-            color = "#a1d99b"
-        elif ntype == "cho_metadata":
-            color = get_metadata_color(
-                MetadataType.CHO.value,
-                node_data[node].get("field", "")
-            )
-        elif ntype == "cho":
-            color = "#66c2a5"
-        else:
-            color = "grey"
-
-        size = 1800 if ntype == "cho" else 1200 if ntype == "memory" else 500
-
-        shape = "o"
-        if ntype == "memory":
-            shape = "s"
-        elif ntype in ["memory_metadata", "cho_metadata"]:
-            shape = "h"
+        color, shape, size, edge = get_node_style(node, node_types, node_data, state)
 
         nx.draw_networkx_nodes(
             G, pos,
@@ -267,17 +238,20 @@ def generate_graph(frame, state):
             node_color=color,
             node_shape=shape,
             node_size=size,
-            edgecolors=edgecolor,
+            edgecolors=edge,
             linewidths=1.5,
-            alpha=0.9 if ntype in ["cho", "memory"] else 0.7,
+            alpha=0.9 if node_types[node] in ["memory", "cho"] else 0.7,
             ax=ax
         )
 
     nx.draw_networkx_edges(G, pos, width=1.2, alpha=0.5, ax=ax)
 
-    # =========================
+    # ✅ LABELS (clean + working)
+    labels = build_labels(G, node_types, node_data, node_counts, cho_cache)
+
+    nx.draw_networkx_labels(G, pos, labels=labels, font_size=7, ax=ax)
+
     # LEGEND
-    # =========================
     legend_elements = [
         Patch(facecolor="#3182bd", label="Memory (expanded)"),
         Patch(facecolor="#9ecae1", edgecolor="black", label="Memory (collapsed)"),
@@ -288,31 +262,6 @@ def generate_graph(frame, state):
     ]
     ax.legend(handles=legend_elements, loc="upper right")
 
-    # =========================
-    # LABELS
-    # =========================
-    labels = {}
-    for node in G.nodes:
-        ntype = node_types[node]
-        data = node_data.get(node, {})
-
-        if ntype == "memory":
-            labels[node] = get_memory_title(data.text, data.custom_id)
-
-        elif ntype in ["memory_metadata", "cho_metadata"]:
-            field = data.get("field", "").split(":")[-1]
-            count = node_counts[node]
-            labels[node] = f"{field} ({count})" if count > 1 else field
-
-        elif ntype == "cho":
-            cho_obj = session.query(CHO).filter_by(custom_id=data).first()
-            labels[node] = cho_obj.title if cho_obj else str(data)
-
-    nx.draw_networkx_labels(G, pos, labels=labels, font_size=7, ax=ax)
-
-    # =========================
-    # FINALIZE + TOOLBAR
-    # =========================
     ax.set_title(
         f"Memory View: {state.current_memory.custom_id}"
         if state.current_memory else f"CHO View: {state.current_cho}"
@@ -324,62 +273,37 @@ def generate_graph(frame, state):
 
     state.canvas = canvas
 
-   
-    # =========================
-    # CONTROLS (FIXED)
-    # =========================
-    
-    control_frame = Frame(frame)
-    control_frame.pack(fill="x")
-    state.control_frame = control_frame
-    
-    # hidden toolbar (for functionality only)
     hidden_toolbar = NavigationToolbar2Tk(canvas, frame)
     hidden_toolbar.pack_forget()
     canvas.toolbar = hidden_toolbar
     state.hidden_toolbar = hidden_toolbar
-    
-    def zoom():
-        canvas.toolbar.zoom()
-    
-    def pan():
-        canvas.toolbar.pan()
-    
-    def reset():
-        ax.set_xlim(auto=True)
-        ax.set_ylim(auto=True)
-        canvas.draw()
-        
-    # =========================
-    # CLICK HANDLER
-    # =========================
+
+    control_frame = Frame(frame)
+    control_frame.pack(fill="x")
+    state.control_frame = control_frame
+
+    # CLICK
     def on_click(event):
         if event.xdata is None:
             return
-    
+
         for node, (x, y) in pos.items():
             if abs(event.xdata - x) < 0.05 and abs(event.ydata - y) < 0.05:
-    
-                if event.button == 1:  # LEFT CLICK
-                    if node_types[node] == "memory":
-                        mem_id = node.split(":")[1]
-    
-                        if mem_id in state.expanded_memories:
-                            state.expanded_memories.remove(mem_id)
-                        else:
-                            state.expanded_memories.add(mem_id)
-    
-                        generate_graph(frame, state)
-                        return
-    
-                elif event.button == 3:  # RIGHT CLICK
-                    print(f"Right-click on {node}")
-    
+                if event.button == 1 and node_types[node] == "memory":
+                    mem_id = node.split(":")[1]
+
+                    if mem_id in state.expanded_memories:
+                        state.expanded_memories.remove(mem_id)
+                    else:
+                        state.expanded_memories.add(mem_id)
+
+                    generate_graph(frame, state)
+                    return
+
     fig.canvas.mpl_connect("button_press_event", on_click)
-    
-    
+
     # =========================
-    # TOOLTIP
+    # TOOLTIP ✅ RESTORED
     # =========================
     tooltip = ax.annotate(
         "",
@@ -389,22 +313,30 @@ def generate_graph(frame, state):
         bbox=dict(boxstyle="round", fc="w"),
     )
     tooltip.set_visible(False)
-    
+
     def on_move(event):
         if event.xdata is None:
+            tooltip.set_visible(False)
+            fig.canvas.draw_idle()
             return
-    
+
         for node, (x, y) in pos.items():
             if abs(event.xdata - x) < 0.05 and abs(event.ydata - y) < 0.05:
+
+                # ✅ ONLY metadata nodes show tooltip
                 if node_types[node] in ["memory_metadata", "cho_metadata"]:
                     data = node_data[node]
+
                     tooltip.xy = (x, y)
-                    tooltip.set_text(f"{data.get('field')}\n{data.get('value')}")
+                    tooltip.set_text(
+                        f"{data.get('field')}\n{data.get('value')}"
+                    )
                     tooltip.set_visible(True)
                     fig.canvas.draw_idle()
                     return
-    
+
+        # ✅ hide tooltip if nothing matched
         tooltip.set_visible(False)
         fig.canvas.draw_idle()
-    
+
     fig.canvas.mpl_connect("motion_notify_event", on_move)
