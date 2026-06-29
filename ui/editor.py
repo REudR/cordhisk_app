@@ -3,9 +3,9 @@ import re
 from tkinter import messagebox
 
 from db import session
-from services.metadata import parse_text_and_spans, rebuild_text_from_spans
+from services.metadata import parse_text_and_spans
+from services.memory_service import rebuild_from_spans  # ✅ NEW
 from services.types import MetadataType
-
 
 
 class Editor:
@@ -16,9 +16,8 @@ class Editor:
         self.text = tk.Text(parent)
         self.text.pack(fill="both", expand=True)
 
-        # ✅ Two highlight styles
-        self.text.tag_config("memory_meta", background="#a1d99b")  # green
-        self.text.tag_config("cho_meta", background="#cce5ff")     # light blue
+        self.text.tag_config("memory_meta", background="#a1d99b")
+        self.text.tag_config("cho_meta", background="#cce5ff")
 
         self.text.bind("<<Modified>>", self.on_change)
 
@@ -41,128 +40,74 @@ class Editor:
 
         text = memory.text or ""
 
-        # ✅ Remove RDF block completely
         text = re.sub(r'<rdf:RDF.*?</rdf:RDF>', '', text, flags=re.DOTALL)
 
-        # ✅ Parse clean text + spans
         clean, spans = parse_text_and_spans(text)
         self.state.spans = spans
 
-        # ✅ Show only clean text (no tags)
         self.text.delete("1.0", tk.END)
         self.text.insert("1.0", clean)
 
         self.loading = False
 
-        # ✅ Apply highlights
         self.highlight_spans()
 
         if hasattr(self.state, "metadata_panel"):
             self.state.metadata_panel.refresh()
 
     # =========================
-    # SAVE MEMORY
+    # SAVE MEMORY ✅ SIMPLIFIED
     # =========================
     def save(self):
         m = self.state.current_memory
         if not m:
             return
-    
+
         txt = self.text.get("1.0", tk.END)
         spans = list(self.state.spans)
-    
-        # =========================
-        # STEP 1: rebuild inline tags
-        # =========================
-        content = rebuild_text_from_spans(txt, spans)
-    
-        # =========================
-        # STEP 2: rebuild memory metadata block
-        # =========================
-        metadata = []
-        seen = set()
-    
-        for s in spans:
-            if s.get("type") == MetadataType.MEMORY.value:
-                field = s.get("field")
-                value = s.get("value")
-    
-                if not field or not value:
-                    continue
-    
-                key = (field, value)
-                if key in seen:
-                    continue
-                seen.add(key)
-    
-                metadata.append((field, value))
-    
-        block = "=== MEMORY METADATA START ===\n"
-    
-        for field, value in metadata:
-            block += f'<{field} type="memory">{value}</{field}>\n'
-    
-        block += "=== MEMORY METADATA END ===\n"
-    
-        # ✅ Clean join (no extra blank lines)
-        final = block + content.lstrip("\n")
-    
-        # =========================
-        # STEP 3: update model
-        # =========================
+
+        # ✅ CENTRALIZED REBUILD
+        final, metadata = rebuild_from_spans(txt, spans)
+
         m.text = final
-    
-        # ✅ Update title field (critical for left panel)
-        for field, value in metadata:
-            if field == "dc:title":
-                m.title = value
-                break
-    
-        # =========================
-        # STEP 4: write file
-        # =========================
+
+        # ✅ update title safely
+        if "dc:title" in metadata:
+            m.title = metadata["dc:title"]
+
         if m.file_path:
             with open(m.file_path, "w", encoding="utf-8") as f:
                 f.write(final)
-    
-        # =========================
-        # STEP 5: commit DB
-        # =========================
+
         session.commit()
-    
-        # =========================
-        # STEP 6: refresh UI (left panel) ✅
-        # =========================
+
         if hasattr(self.state, "memory_panel"):
             self.state.memory_panel.load()
+
     # =========================
-    # HIGHLIGHT METADATA
+    # HIGHLIGHT SPANS
     # =========================
     def highlight_spans(self):
-        # Remove previous highlights
         self.text.tag_remove("memory_meta", "1.0", tk.END)
         self.text.tag_remove("cho_meta", "1.0", tk.END)
 
         for s in getattr(self.state, "spans", []):
-        
-            # ✅ SKIP spans without positions
             if "start" not in s or "end" not in s:
                 continue
-        
+
             try:
-                if s.get("type") == MetadataType.MEMORY.value:
-                    tag = "memory_meta"
-                elif s.get("type") == MetadataType.CHO.value:
-                    tag = "cho_meta"
-                else:
-                    continue
-        
+                tag = (
+                    "memory_meta"
+                    if s.get("type") == MetadataType.MEMORY.value
+                    else "cho_meta"
+                )
+
                 self.text.tag_add(
                     tag,
                     f"1.0+{s['start']}c",
                     f"1.0+{s['end']}c"
                 )
-        
+
             except Exception as e:
                 print("Highlight error:", e)
 
@@ -176,7 +121,6 @@ class Editor:
 
             start = int(self.text.count("1.0", sel_start)[0])
             end = int(self.text.count("1.0", sel_end)[0])
-
             value = self.text.get(tk.SEL_FIRST, tk.SEL_LAST)
 
         except tk.TclError:
@@ -187,7 +131,6 @@ class Editor:
             messagebox.showerror("Error", "Missing field")
             return
 
-        # ✅ Default: memory metadata
         span = {
             "start": start,
             "end": end,
@@ -196,15 +139,12 @@ class Editor:
             "type": MetadataType.MEMORY.value
         }
 
-        # ✅ If CHO provided → override type
         if cho:
             span["cho"] = cho
             span["type"] = MetadataType.CHO.value
 
-        # Avoid duplicates
-        for s in self.state.spans:
-            if s["start"] == start and s["end"] == end:
-                return
+        if any(s["start"] == start and s["end"] == end for s in self.state.spans):
+            return
 
         self.state.spans.append(span)
         self.state.spans.sort(key=lambda s: s["start"])
@@ -225,7 +165,6 @@ class Editor:
             start = int(self.text.count("1.0", sel_start)[0])
             end = int(self.text.count("1.0", sel_end)[0])
 
-            # Remove matching span
             self.state.spans = [
                 s for s in self.state.spans
                 if not (s["start"] == start and s["end"] == end)

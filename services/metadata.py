@@ -1,6 +1,6 @@
 import re
-from services.types import MetadataType
 import xml.etree.ElementTree as ET
+from services.types import MetadataType
 
 
 # =========================
@@ -32,26 +32,25 @@ def build_rdf_block(metadata):
 
 
 # =========================
-# PARSE TEXT + SPANS
+# PARSE TEXT + SPANS ✅ CLEAN
 # =========================
 def parse_text_and_spans(text):
-
     if not text:
         return "", []
 
     try:
-        # ---------------------------------
+        # =========================
         # STEP 1: Extract memory metadata block
-        # ---------------------------------
+        # =========================
         block_pattern = r'===\s*MEMORY METADATA START\s*===(.*?)===\s*MEMORY METADATA END\s*==='
         block_match = re.search(block_pattern, text, re.DOTALL)
 
         memory_md = []
 
         if block_match:
-            block_content = block_match.group(1)
+            block = block_match.group(1)
 
-            for m in COMBINED_RE.finditer(block_content):
+            for m in COMBINED_RE.finditer(block):
                 if m.group("type") == "memory":
                     memory_md.append({
                         "field": m.group("field"),
@@ -59,12 +58,12 @@ def parse_text_and_spans(text):
                         "type": MetadataType.MEMORY.value
                     })
 
-            # remove block from visible content
+            # remove block from visible text
             text = re.sub(block_pattern, '', text, flags=re.DOTALL)
 
-        # ---------------------------------
+        # =========================
         # STEP 2: Parse inline tags
-        # ---------------------------------
+        # =========================
         spans = []
         clean = ""
         idx = 0
@@ -73,7 +72,6 @@ def parse_text_and_spans(text):
             start, end = m.span()
 
             clean += text[idx:start]
-
             inner = m.group("value")
 
             span_start = len(clean)
@@ -95,29 +93,24 @@ def parse_text_and_spans(text):
 
         clean += text[idx:]
 
-        # ---------------------------------
-        # STEP 3: Add memory metadata (ALWAYS SAFE)
-        # ---------------------------------
+        # =========================
+        # STEP 3: Map memory metadata into clean text
+        # =========================
         for md in memory_md:
             value = md["value"]
-
             start = clean.find(value)
 
-            if start == -1:
-                # ✅ keep even if no position
-                spans.append({
-                    "field": md["field"],
-                    "value": value,
-                    "type": MetadataType.MEMORY.value
-                })
-            else:
-                spans.append({
-                    "start": start,
-                    "end": start + len(value),
-                    "field": md["field"],
-                    "value": value,
-                    "type": MetadataType.MEMORY.value
-                })
+            span = {
+                "field": md["field"],
+                "value": value,
+                "type": MetadataType.MEMORY.value
+            }
+
+            if start != -1:
+                span["start"] = start
+                span["end"] = start + len(value)
+
+            spans.append(span)
 
         spans.sort(key=lambda s: s.get("start", -1))
 
@@ -127,80 +120,18 @@ def parse_text_and_spans(text):
         print("ERROR in parse_text_and_spans:", e)
         return "", []
 
-    # ---------------------------------
-    # STEP 2: Parse rest of text
-    # ---------------------------------
-    spans = []
-    clean = ""
-    idx = 0
 
-    for m in COMBINED_RE.finditer(text):
-        start, end = m.span()
-
-        clean += text[idx:start]
-
-        inner = m.group("value")
-
-        span_start = len(clean)
-        clean += inner
-        span_end = len(clean)
-
-        spans.append({
-            "start": span_start,
-            "end": span_end,
-            "field": m.group("field"),
-            "cho": m.group("cho"),
-            "value": inner,
-            "type": MetadataType.MEMORY.value
-                if m.group("type") == "memory"
-                else MetadataType.CHO.value
-        })
-
-        idx = end
-
-    clean += text[idx:]
-
-    # ---------------------------------
-    # STEP 3: Map memory metadata into clean text
-    # ---------------------------------
-    for md in memory_md:
-        value = md["value"]
-    
-        # ✅ TRY to locate value in text
-        start = clean.find(value)
-    
-        # ✅ IF NOT FOUND → still keep metadata (no position)
-        if start == -1:
-            spans.append({
-                "field": md["field"],
-                "value": value,
-                "type": MetadataType.MEMORY.value
-            })
-            continue
-    
-        end = start + len(value)
-    
-        spans.append({
-            "start": start,
-            "end": end,
-            "field": md["field"],
-            "value": value,
-            "type": MetadataType.MEMORY.value
-        })
-
-import re
-
-# EXTRACT METADATA (SAFE)# =========================
+# =========================
+# EXTRACT METADATA ✅ CLEAN
 # =========================
 def extract_metadata(text):
-
     if not text:
         return []
 
     metadata = []
 
     # =========================
-    # 1. EXTRACT MEMORY BLOCK (WITHOUT DELETING IT YET)
+    # MEMORY BLOCK
     # =========================
     memory_blocks = re.findall(
         r'=== MEMORY METADATA START ===(.*?)=== MEMORY METADATA END ===',
@@ -208,20 +139,17 @@ def extract_metadata(text):
         flags=re.DOTALL
     )
 
-    # =========================
-    # 2. PARSE MEMORY METADATA
-    # =========================
     for block in memory_blocks:
         for m in COMBINED_RE.finditer(block):
             metadata.append({
                 "field": m.group("field"),
-                "cho": None,  # ✅ explicitly None for memory metadata
+                "cho": None,
                 "value": m.group("value"),
                 "type": MetadataType.MEMORY.value
             })
 
     # =========================
-    # 3. REMOVE MEMORY BLOCK FROM TEXT (for CHO parsing only)
+    # REMOVE MEMORY BLOCK
     # =========================
     text_wo_memory = re.sub(
         r'=== MEMORY METADATA START ===.*?=== MEMORY METADATA END ===',
@@ -231,7 +159,7 @@ def extract_metadata(text):
     )
 
     # =========================
-    # 4. PARSE REMAINING (CHO METADATA)
+    # CHO METADATA
     # =========================
     for m in COMBINED_RE.finditer(text_wo_memory):
         metadata.append({
@@ -242,6 +170,7 @@ def extract_metadata(text):
         })
 
     return metadata
+
 
 # =========================
 # MEMORY TITLE
@@ -272,11 +201,13 @@ def get_memory_title(text, fallback):
 
 
 # =========================
-# REBUILD TEXT
+# REBUILD TEXT FROM SPANS
 # =========================
 def rebuild_text_from_spans(text, spans):
     offset = 0
+
     valid_spans = [s for s in spans if "start" in s and "end" in s]
+
     for span in sorted(valid_spans, key=lambda s: s["start"]):
         start = span["start"] + offset
         end = span["end"] + offset

@@ -1,7 +1,6 @@
 import re
 import tkinter as tk
 from tkinter import ttk
-from enum import Enum
 from services.types import MetadataType
 from services.metadata_schema import METADATA_FIELDS
 
@@ -9,11 +8,6 @@ RE_METADATA = re.compile(r'<(.*?) cho="(.*?)">(.*?)</\1>')
 RE_MEMORY_METADATA = re.compile(r'<(.*?) type="memory">(.*?)</\1>')
 RE_ANY_TAG = re.compile(r"<.*?>(.*?)</.*?>")
 RE_STRIP = re.compile(r"</?[^>]+>")
-
-class MetadataType(Enum):
-    """Distinguishes metadata origins"""
-    MEMORY = "memory"      # WebResource fields - intrinsic to the memory
-    CHO = "cho"            # CHO/Agent fields - linked to Cultural Heritage Objects
 
 def field_to_alias(field):
     """Convert metadata field to user-friendly label"""
@@ -31,25 +25,6 @@ def field_to_alias(field):
     name = name.replace("_", " ")
 
     return name.capitalize()
-
-
-def field_to_display(field):
-    """Convert field to '[Category] Alias' format"""
-
-    category = get_category_for_field(field) or "Unknown"
-    alias = field_to_alias(field)
-
-    return f"[{category}] {alias}"
-
-
-def display_to_field(display, fields):
-    """Convert display string back to real field"""
-
-    for f in fields:
-        if field_to_display(f) == display:
-            return f
-
-    return None
 
 def alias_to_field(alias, fields):
     """Find the real field corresponding to an alias"""

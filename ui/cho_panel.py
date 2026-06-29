@@ -3,11 +3,13 @@ from tkinter import simpledialog, messagebox
 from db import session, CHO
 from utils import load_list
 
+
 class CHOPanel:
     def __init__(self, parent, state, label):
         self.state = state
         self.label = label
         self.chos = []
+
         self.listbox = tk.Listbox(parent)
         self.listbox.pack(fill="both", expand=True)
 
@@ -17,14 +19,13 @@ class CHOPanel:
         self.listbox.bind("<<ListboxSelect>>", self.select)
 
     def load(self):
-        from db import session, CHO
-    
         self.chos = session.query(CHO).all()
-    
-        self.listbox.delete(0, "end")
-    
-        for c in self.chos:
-            self.listbox.insert("end", f"{c.custom_id} - {c.title}")
+
+        load_list(
+            self.listbox,
+            self.chos,
+            lambda c: f"{c.custom_id} - {c.title}"
+        )
 
     def add(self):
         cid = simpledialog.askstring("ID", "CHO ID")
@@ -55,18 +56,15 @@ class CHOPanel:
             self.load()
 
     def select(self, event):
-        selected = self.listbox.curselection()
-        if not selected:
+        if not self.listbox.curselection():
             return
-    
-        idx = selected[0]
-    
+
+        idx = self.listbox.curselection()[0]
         if idx >= len(self.chos):
             return
-    
-        cho = self.chos[idx]
-        cid = cho.custom_id
-    
+
+        cid = self.chos[idx].custom_id
+
         self.state.current_cho = cid
         self.state.current_memory = None
 
