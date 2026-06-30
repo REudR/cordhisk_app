@@ -321,16 +321,32 @@ def generate_graph(frame, state):
 
         for node, (x, y) in pos.items():
             if abs(event.xdata - x) < 0.05 and abs(event.ydata - y) < 0.05:
-
-                    data = node_data[node]
-
-                    tooltip.xy = (x, y)
-                    tooltip.set_text(
-                        f"{data.get('field')}\n{data.get('value')}"
-                    )
-                    tooltip.set_visible(True)
+        
+                t = node_types[node]
+                data = node_data[node]
+        
+                tooltip.xy = (x, y)
+        
+                if t in ["memory_metadata", "cho_metadata"] and isinstance(data, dict):
+                    field = data.get("field", "").split(":")[-1]
+                    value = data.get("value", "")
+                    tooltip.set_text(f"{field}\n{value}")
+                # ✅ MEMORY
+                elif t == "memory":
+                    tooltip.set_text(f"{data.custom_id}\n{data.title}")
+        
+                elif t == "cho":
+                    title = cho_cache.get(data, str(data))
+                    tooltip.set_text(f"{data}\n{title}")
+        
+                else:
+                    tooltip.set_visible(False)
                     fig.canvas.draw_idle()
                     return
+        
+                tooltip.set_visible(True)
+                fig.canvas.draw_idle()
+                return
 
         tooltip.set_visible(False)
         fig.canvas.draw_idle()
