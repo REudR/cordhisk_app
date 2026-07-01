@@ -106,6 +106,34 @@ class WebAppTests(unittest.TestCase):
             session.delete(memory)
             session.commit()
 
+    def test_delete_metadata_preserves_wrapped_text(self):
+        memory = Memory(
+            custom_id='test-delete-preserves-text',
+            title='Memory for preserving text',
+            text='Before <dc:title type="memory">Momo</dc:title> after',
+            file_path='demo.txt'
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.post(
+                f'/memories/{memory.id}/edit',
+                data={
+                    'title': 'Updated memory',
+                    'text': 'Before <dc:title type="memory">Momo</dc:title> after',
+                    'delete_memory_metadata[dc:title]': '1',
+                },
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            updated = session.query(Memory).get(memory.id)
+            self.assertEqual(updated.text, 'Before Momo after')
+        finally:
+            session.delete(memory)
+            session.commit()
+
     def test_annotation_wraps_selected_text(self):
         memory = Memory(
             custom_id='test-annotation',

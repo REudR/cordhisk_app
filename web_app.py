@@ -360,10 +360,14 @@ HTML_TEMPLATE = """
           };
           const showMetadataNodesFor = (parentId, nodeType) => {
             hideMetadataNodes();
+            if (nodeType !== 'cho') {
+              return;
+            }
             metadataNodes.forEach((mdNode) => {
-              const visible = mdNode.getAttribute('data-parent-id') === parentId;
-              mdNode.classList.toggle('metadata-visible', visible && (nodeType === 'memory' || nodeType === 'cho'));
-              mdNode.classList.toggle('metadata-hidden', !(visible && (nodeType === 'memory' || nodeType === 'cho')));
+              const isChoMetadata = mdNode.getAttribute('data-node-type') === 'cho_metadata';
+              const visible = isChoMetadata && mdNode.getAttribute('data-parent-id') === parentId;
+              mdNode.classList.toggle('metadata-visible', visible);
+              mdNode.classList.toggle('metadata-hidden', !visible);
             });
           };
 
@@ -386,6 +390,25 @@ HTML_TEMPLATE = """
                 if (detailPanel) {
                   detailPanel.textContent = 'Hover over a CHO node or click a memory node to inspect its metadata.';
                 }
+              }
+            });
+          });
+
+          metadataNodes.forEach((node) => {
+            node.addEventListener('mouseenter', function () {
+              if (detailPanel) {
+                detailPanel.textContent = node.getAttribute('data-details') || 'No metadata details available.';
+              }
+            });
+            node.addEventListener('click', function (event) {
+              event.preventDefault();
+              if (detailPanel) {
+                detailPanel.textContent = node.getAttribute('data-details') || 'No metadata details available.';
+              }
+            });
+            node.addEventListener('mouseleave', function () {
+              if (detailPanel) {
+                detailPanel.textContent = 'Hover over a CHO node or click a memory node to inspect its metadata.';
               }
             });
             node.addEventListener('click', function (event) {
@@ -615,6 +638,7 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
         metadata_items = extract_metadata(memory.text or "")
         for md_index, md in enumerate(metadata_items):
             if md.get("type") == MetadataType.MEMORY.value:
+                continue  # skip memory metadata entirely
                 md_label = md.get("field") or "metadata"
                 md_node = add_node(
                     f"memory_md:{memory.id}:{md_index}:{md_label}",
@@ -669,10 +693,10 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
 
 def _remove_metadata_tag(text, field, metadata_type, cho=None):
     if metadata_type == MetadataType.MEMORY.value:
-        pattern = rf'<{re.escape(field)}\s+type="memory">.*?</{re.escape(field)}>'
+        pattern = re.compile(rf'(<{re.escape(field)}\s+type="memory">)(.*?)(</{re.escape(field)}>)', re.DOTALL)
     else:
-        pattern = rf'<{re.escape(field)}\s+cho="{re.escape(cho or "")}">.*?</{re.escape(field)}>'
-    return re.sub(pattern, "", text, count=1)
+        pattern = re.compile(rf'(<{re.escape(field)}\s+cho="{re.escape(cho or "")}">)(.*?)(</{re.escape(field)}>)', re.DOTALL)
+    return pattern.sub(lambda match: match.group(2), text, count=1)
 
 
 def _replace_metadata_tag(text, field, value, metadata_type, cho=None):
