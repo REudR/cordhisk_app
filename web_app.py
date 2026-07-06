@@ -95,7 +95,7 @@ HTML_TEMPLATE = """
       .graph-node.metadata-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
       .graph-node.metadata-visible { opacity: 1; visibility: visible; pointer-events: auto; }
       .focused { stroke: #ef4444; stroke-width: 3; }
-      .label { font-size: 12px; fill: #0f172a; }
+      .label { font-size: 12px; fill: #0f172a; pointer-events: none; }
       .result-table { width: 100%; border-collapse: collapse; font-size: 14px; }
       .result-table th, .result-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #e5e7eb; }
       .inline-form { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; margin-top: 10px; }
@@ -126,7 +126,7 @@ HTML_TEMPLATE = """
       .sidebar-list { list-style: none; margin: 0; padding: 0; }
       .sidebar-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
       .sidebar-list a { color: #0f172a; display: inline-block; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .mini-delete { width: 24px; min-width: 24px; height: 24px; line-height: 24px; padding: 0; border-radius: 999px; background: #ef4444; color: white; font-weight: 700; font-size: 14px; }
+      .mini-delete { width: 24px; min-width: 24px; height: 24px; line-height: 24px; padding: 0; border-radius: 999px; background: #facc15; color: #1f2937; font-weight: 700; font-size: 14px; }
       .sidebar-action { margin-bottom: 12px; }
       .sidebar-action button { width: 100%; background: #0ea5e9; }
       .sidebar-pop { display: none; margin-top: 8px; padding: 10px; border-radius: 8px; background: rgba(15, 23, 42, 0.45); border: 1px solid rgba(148, 163, 184, 0.4); }
@@ -138,6 +138,10 @@ HTML_TEMPLATE = """
       .side-btn, .side-btn:visited { display: inline-flex; align-items: center; justify-content: center; text-align: center; min-height: 34px; padding: 6px; border-radius: 8px; color: white; background: #0ea5e9; border: 0; font-size: 12px; font-weight: 600; }
       .side-btn.alt { background: #1d4ed8; }
       .side-btn.disabled { pointer-events: none; opacity: 0.6; }
+      .list-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+      .list-selector button { background: #334155; font-size: 12px; padding: 6px 8px; }
+      .list-selector button.active { background: #0ea5e9; }
+      .list-panel.hidden { display: none; }
       .inline-annotation-row { display: grid; grid-template-columns: minmax(260px, 2fr) minmax(170px, 1fr) minmax(170px, 1fr) auto; gap: 8px; align-items: end; }
       .inline-annotation-row > div { min-width: 0; }
       .inline-annotation-row label { display: block; font-size: 12px; margin-bottom: 3px; }
@@ -201,12 +205,16 @@ HTML_TEMPLATE = """
             <button type="submit">Download</button>
           </form>
         </div>
-        <div class="card sidebar-card">
+        <div class="list-selector">
+          <button type="button" id="show-memories-btn" class="active">Memories</button>
+          <button type="button" id="show-chos-btn">CHO records</button>
+        </div>
+        <div class="card sidebar-card list-panel" id="memories-panel">
           <h3>Memories</h3>
           <ul class="sidebar-list">
             {% for memory in memories %}
             <li>
-              <a href="/?memory_id={{ memory.id }}{% if focus_cho %}&focus_cho={{ focus_cho }}{% endif %}&meta_view={{ active_meta_view }}">{{ memory.custom_id or memory.id }} — {{ memory.title or ('Memory ' ~ memory.id) }}</a>
+              <a href="/?memory_id={{ memory.id }}">{{ memory.custom_id or memory.id }} — {{ memory.title or ('Memory ' ~ memory.id) }}</a>
               <form action="/memories/{{ memory.id }}/delete" method="post" onsubmit="return confirm('Delete this memory permanently?');">
                 <button type="submit" class="mini-delete" title="Delete memory">-</button>
               </form>
@@ -214,7 +222,7 @@ HTML_TEMPLATE = """
             {% endfor %}
           </ul>
         </div>
-        <div class="card sidebar-card">
+        <div class="card sidebar-card list-panel hidden" id="chos-panel">
           <h3>CHO records</h3>
           <ul class="sidebar-list">
             {% for cho in chos %}
@@ -236,7 +244,7 @@ HTML_TEMPLATE = """
         <div class="grid">
           <div class="card">
             <h2>{{ selected_memory.custom_id or selected_memory.id }} — {{ selected_memory.title or ('Memory ' ~ selected_memory.id) }}</h2>
-            {% if active_meta_view == 'memory' %}
+            {% if not focus_cho %}
             <form action="/memories/{{ selected_memory.id }}/annotate" method="post">
               <h3>Annotate highlighted memory text</h3>
               <p>Select text in the highlighted visualisation below, then wrap it as a metadata annotation.</p>
@@ -308,7 +316,7 @@ HTML_TEMPLATE = """
                     {% for node in nodes %}
                     <a href="{{ node.link }}">
                       <circle class="graph-node node {{ node.group }} {% if node.id == ('cho:' ~ focus_cho) or node.id == focus_memory %}focused{% endif %} {% if node.group in ['memory_metadata','cho_metadata'] %}metadata-hidden{% endif %}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-details="{{ node.details or '' }}" title="{{ node.details or '' }}" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius or 32 }}"></circle>
-                      <text class="label" x="{{ node.x }}" y="{{ node.y + 6 }}" text-anchor="middle">{{ node.label }}</text>
+                      <text class="label {% if node.group in ['memory_metadata','cho_metadata'] %}graph-metadata-label metadata-hidden{% endif %}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" x="{{ node.x }}" y="{{ node.y + 6 }}" text-anchor="middle">{{ node.label }}</text>
                     </a>
                     {% endfor %}
                   </g>
@@ -319,18 +327,14 @@ HTML_TEMPLATE = """
           <div>
             <div class="card metadata-card">
               <h3>Metadata Panel</h3>
-              <p>Switch between Memory and CHO metadata visualisations without leaving this memory context.</p>
-              <div class="meta-toggle">
-                <a href="/?memory_id={{ selected_memory.id }}{% if focus_cho %}&focus_cho={{ focus_cho }}{% endif %}&meta_view=memory" class="{% if active_meta_view == 'memory' %}active{% endif %}">Memory metadata</a>
-                <a href="/?memory_id={{ selected_memory.id }}{% if focus_cho %}&focus_cho={{ focus_cho }}{% endif %}&meta_view=cho" class="{% if active_meta_view == 'cho' %}active{% endif %}">CHO metadata</a>
-              </div>
+              <p>Metadata shown depends on selection: click a memory for memory metadata or click a CHO for CHO metadata grouped by memory.</p>
 
-              {% if active_meta_view == 'cho' and selected_cho_details %}
+              {% if focus_cho and selected_cho_details %}
                 <h4>CHO {{ selected_cho_details.label }} — {{ selected_cho_details.title }}</h4>
                 <p>Metadata grouped by memory for the selected CHO.</p>
                 {% for group in selected_cho_details.memories %}
                 <div class="cho-memory-group">
-                  <p><strong><a href="/?memory_id={{ group.memory_id }}&focus_cho={{ selected_cho_details.label }}&meta_view=cho">{{ group.memory_label }}</a></strong></p>
+                  <p><strong><a href="/?memory_id={{ group.memory_id }}&focus_cho={{ selected_cho_details.label }}">{{ group.memory_label }}</a></strong></p>
                   <div class="tag-list">
                     {% for tag in group.tags %}
                     <span class="pill cho">{{ tag.field }}: {{ tag.value }}</span>
@@ -340,7 +344,7 @@ HTML_TEMPLATE = """
                 {% else %}
                 <p>No metadata found for this CHO in the current memories.</p>
                 {% endfor %}
-              {% elif active_meta_view == 'cho' %}
+              {% elif focus_cho %}
                 <p>Select a CHO from the sidebar or graph to view CHO metadata grouped by memory.</p>
               {% else %}
                 <form action="/memories/{{ selected_memory.id }}/edit" method="post" id="memory-metadata-form">
@@ -392,7 +396,7 @@ HTML_TEMPLATE = """
 
                   <div class="metadata-actions">
                     <button type="submit">Save metadata changes</button>
-                    <button type="submit" name="remove_selected" value="1">Remove selected tags</button>
+                    <button type="submit" name="remove_selected" value="1" onclick="return confirm('Remove selected metadata tags?');">Remove selected tags</button>
                   </div>
                 </form>
               {% endif %}
@@ -427,6 +431,10 @@ HTML_TEMPLATE = """
         const addChoPop = document.getElementById('add-cho-pop');
         const openExportCho = document.getElementById('open-export-cho');
         const exportChoPop = document.getElementById('export-cho-pop');
+        const showMemoriesBtn = document.getElementById('show-memories-btn');
+        const showChosBtn = document.getElementById('show-chos-btn');
+        const memoriesPanel = document.getElementById('memories-panel');
+        const chosPanel = document.getElementById('chos-panel');
         let zoomLevel = 1;
         let panX = 0;
         let panY = 0;
@@ -506,6 +514,35 @@ HTML_TEMPLATE = """
           });
         }
 
+        if (showMemoriesBtn && showChosBtn && memoriesPanel && chosPanel) {
+          const selectList = function (target) {
+            const showMemories = target === 'memories';
+            memoriesPanel.classList.toggle('hidden', !showMemories);
+            chosPanel.classList.toggle('hidden', showMemories);
+            showMemoriesBtn.classList.toggle('active', showMemories);
+            showChosBtn.classList.toggle('active', !showMemories);
+          };
+          showMemoriesBtn.addEventListener('click', function () { selectList('memories'); });
+          showChosBtn.addEventListener('click', function () { selectList('chos'); });
+          {% if focus_cho %}
+          selectList('chos');
+          {% else %}
+          selectList('memories');
+          {% endif %}
+        }
+
+        if (memoryMetadataForm) {
+          memoryMetadataForm.addEventListener('submit', function (event) {
+            const deleteInputs = Array.from(memoryMetadataForm.querySelectorAll('input[type="checkbox"][name^="delete_"]'));
+            const hasDeletion = deleteInputs.some((input) => input.checked);
+            const submitter = event.submitter;
+            const explicitRemove = submitter && submitter.name === 'remove_selected';
+            if ((hasDeletion || explicitRemove) && !window.confirm('Confirm removal of selected metadata tags?')) {
+              event.preventDefault();
+            }
+          });
+        }
+
         function applyTransform() {
           if (graphContent) {
             graphContent.setAttribute('transform', `translate(${panX} ${panY}) scale(${zoomLevel})`);
@@ -566,6 +603,7 @@ HTML_TEMPLATE = """
           });
 
           const metadataNodes = Array.from(document.querySelectorAll('.graph-node[data-node-type="memory_metadata"], .graph-node[data-node-type="cho_metadata"]'));
+          const metadataLabels = Array.from(document.querySelectorAll('.graph-metadata-label'));
           let hideTimer = null;
           const setHoverValue = (text) => {
             if (hoverValueBox) {
@@ -589,6 +627,10 @@ HTML_TEMPLATE = """
               mdNode.classList.remove('metadata-visible');
               mdNode.classList.add('metadata-hidden');
             });
+            metadataLabels.forEach((label) => {
+              label.classList.remove('metadata-visible');
+              label.classList.add('metadata-hidden');
+            });
           };
           const showMetadataNodesFor = (parentId, nodeType) => {
             hideMetadataNodes();
@@ -600,6 +642,12 @@ HTML_TEMPLATE = """
               const visible = isChoMetadata && mdNode.getAttribute('data-parent-id') === parentId;
               mdNode.classList.toggle('metadata-visible', visible);
               mdNode.classList.toggle('metadata-hidden', !visible);
+            });
+            metadataLabels.forEach((label) => {
+              const isChoMetadata = label.getAttribute('data-node-type') === 'cho_metadata';
+              const visible = isChoMetadata && label.getAttribute('data-parent-id') === parentId;
+              label.classList.toggle('metadata-visible', visible);
+              label.classList.toggle('metadata-hidden', !visible);
             });
           };
 
