@@ -147,6 +147,7 @@ HTML_TEMPLATE = """
       .inline-annotation-row label { display: block; font-size: 12px; margin-bottom: 3px; }
       .inline-annotation-row input, .inline-annotation-row select { margin-bottom: 0; }
       .inline-annotation-row button { white-space: nowrap; }
+      .status-msg { display: none; }
       @media (max-width: 980px) {
         .shell { grid-template-columns: 1fr; }
         .sidebar { border-bottom: 1px solid #334155; }
@@ -238,7 +239,7 @@ HTML_TEMPLATE = """
       </aside>
       <main class="content">
         {% if notice_message %}
-        <div class="notice {{ notice_level }}">{{ notice_message }}</div>
+        <div class="status-msg" aria-hidden="true">{{ notice_message }}</div>
         {% endif %}
         {% if selected_memory %}
         <div class="grid">
@@ -293,10 +294,6 @@ HTML_TEMPLATE = """
               <input type="hidden" name="focus_cho" value="{{ focus_cho or '' }}">
               <input type="hidden" name="meta_view" value="{{ active_meta_view }}">
             </form>
-            {% else %}
-            <div class="notice success">
-              CHO metadata view is active. Switch to Memory metadata to inspect or annotate full memory content.
-            </div>
             {% endif %}
             <div class="card graph-card" style="margin-top: 14px;">
               <h3>Memory relationship graph</h3>
@@ -566,6 +563,9 @@ HTML_TEMPLATE = """
               zoomLevel = 1;
               panX = 0;
               panY = 0;
+              pinnedChoParentId = '';
+              hideMetadataNodes();
+              setHoverValue('Hover CHO or metadata nodes to inspect values.');
               applyTransform();
             });
           }
@@ -605,6 +605,7 @@ HTML_TEMPLATE = """
           const metadataNodes = Array.from(document.querySelectorAll('.graph-node[data-node-type="memory_metadata"], .graph-node[data-node-type="cho_metadata"]'));
           const metadataLabels = Array.from(document.querySelectorAll('.graph-metadata-label'));
           let hideTimer = null;
+          let pinnedChoParentId = '';
           const setHoverValue = (text) => {
             if (hoverValueBox) {
               hoverValueBox.textContent = text || 'No metadata details available.';
@@ -617,6 +618,9 @@ HTML_TEMPLATE = """
             }
           };
           const scheduleHideMetadataNodes = () => {
+            if (pinnedChoParentId) {
+              return;
+            }
             cancelHideTimer();
             hideTimer = setTimeout(() => {
               hideMetadataNodes();
@@ -672,6 +676,12 @@ HTML_TEMPLATE = """
               const nodeType = node.getAttribute('data-node-type');
               if (nodeType === 'cho' || nodeType === 'memory') {
                 const parentId = node.getAttribute('data-parent-id');
+                if (nodeType === 'cho') {
+                  event.preventDefault();
+                  pinnedChoParentId = parentId || '';
+                } else {
+                  pinnedChoParentId = '';
+                }
                 showMetadataNodesFor(parentId, nodeType);
                 setHoverValue(node.getAttribute('data-details'));
               }
@@ -688,7 +698,9 @@ HTML_TEMPLATE = """
               setHoverValue(node.getAttribute('data-details'));
             });
             node.addEventListener('mouseleave', function () {
-              scheduleHideMetadataNodes();
+              if (!pinnedChoParentId) {
+                scheduleHideMetadataNodes();
+              }
             });
           });
         }
@@ -856,15 +868,13 @@ IMPORT_TEMPLATE = """
       form input, form textarea { width: 100%; margin-bottom: 10px; padding: 8px; box-sizing: border-box; }
       button { padding: 8px 12px; border: 0; border-radius: 6px; background: #2563eb; color: white; cursor: pointer; }
       a { color: #2563eb; text-decoration: none; }
-      .notice { padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; font-size: 14px; }
-      .notice.success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-      .notice.error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+      .status-msg { display: none; }
     </style>
   </head>
   <body>
     <div class="wrap">
       {% if notice_message %}
-      <div class="notice {{ notice_level }}">{{ notice_message }}</div>
+      <div class="status-msg" aria-hidden="true">{{ notice_message }}</div>
       {% endif %}
       <div class="card">
         <h1>Import a new memory</h1>
