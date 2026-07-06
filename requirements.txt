@@ -1,5 +1,2 @@
-sqlalchemy
-networkx
-matplotlib
-scipy
 flask
+sqlalchemy
