@@ -92,8 +92,8 @@ HTML_TEMPLATE = """
       .cho { fill: #34d399; }
       .memory_metadata { fill: #a3e635; }
       .cho_metadata { fill: #f59e0b; }
-      .graph-node.metadata-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-      .graph-node.metadata-visible { opacity: 1; visibility: visible; pointer-events: auto; }
+      .metadata-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+      .metadata-visible { opacity: 1; visibility: visible; pointer-events: auto; }
       .focused { stroke: #ef4444; stroke-width: 3; }
       .label { font-size: 12px; fill: #0f172a; pointer-events: none; }
       .result-table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -228,7 +228,7 @@ HTML_TEMPLATE = """
           <ul class="sidebar-list">
             {% for cho in chos %}
             <li>
-              <a href="/?memory_id={{ selected_memory.id if selected_memory else '' }}&focus_cho={{ cho.custom_id or cho.id }}&meta_view=cho">{{ cho.custom_id or cho.id }} — {{ cho.title or cho.custom_id or cho.id }}</a>
+              <a href="/?memory_id={{ selected_memory.id if selected_memory else '' }}&focus_cho={{ cho.custom_id or cho.id }}">{{ cho.custom_id or cho.id }} — {{ cho.title or cho.custom_id or cho.id }}</a>
               <form action="/chos/{{ cho.id }}/delete{% if selected_memory %}?memory_id={{ selected_memory.id }}{% endif %}" method="post" onsubmit="return confirm('Delete this CHO and remove its tags from all memories?');">
                 <button type="submit" class="mini-delete" title="Delete CHO">-</button>
               </form>
@@ -292,7 +292,6 @@ HTML_TEMPLATE = """
                 </div>
               </div>
               <input type="hidden" name="focus_cho" value="{{ focus_cho or '' }}">
-              <input type="hidden" name="meta_view" value="{{ active_meta_view }}">
             </form>
             {% endif %}
             <div class="card graph-card" style="margin-top: 14px;">
@@ -312,7 +311,7 @@ HTML_TEMPLATE = """
                     {% endfor %}
                     {% for node in nodes %}
                     <a href="{{ node.link }}">
-                      <circle class="graph-node node {{ node.group }} {% if node.id == ('cho:' ~ focus_cho) or node.id == focus_memory %}focused{% endif %} {% if node.group in ['memory_metadata','cho_metadata'] %}metadata-hidden{% endif %}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-details="{{ node.details or '' }}" title="{{ node.details or '' }}" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius or 32 }}"></circle>
+                      <circle class="graph-node node {{ node.group }} {% if node.id == ('cho:' ~ focus_cho) or node.id == focus_memory %}focused{% endif %} {% if node.group in ['memory_metadata','cho_metadata'] %}metadata-hidden{% endif %}" data-node-id="{{ node.id }}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-details="{{ node.details or '' }}" title="{{ node.details or '' }}" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius or 32 }}"></circle>
                       <text class="label {% if node.group in ['memory_metadata','cho_metadata'] %}graph-metadata-label metadata-hidden{% endif %}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" x="{{ node.x }}" y="{{ node.y + 6 }}" text-anchor="middle">{{ node.label }}</text>
                     </a>
                     {% endfor %}
@@ -346,7 +345,6 @@ HTML_TEMPLATE = """
               {% else %}
                 <form action="/memories/{{ selected_memory.id }}/edit" method="post" id="memory-metadata-form">
                   <input type="hidden" name="focus_cho" value="{{ focus_cho or '' }}">
-                  <input type="hidden" name="meta_view" value="memory">
                   <input type="hidden" id="inline-edit-field" name="edit_memory_metadata_field" value="">
                   <input type="hidden" id="inline-edit-value" name="edit_memory_metadata_value" value="">
 
@@ -641,15 +639,16 @@ HTML_TEMPLATE = """
             if (nodeType !== 'cho') {
               return;
             }
+            const targetParent = parentId || '';
             metadataNodes.forEach((mdNode) => {
               const isChoMetadata = mdNode.getAttribute('data-node-type') === 'cho_metadata';
-              const visible = isChoMetadata && mdNode.getAttribute('data-parent-id') === parentId;
+              const visible = isChoMetadata && mdNode.getAttribute('data-parent-id') === targetParent;
               mdNode.classList.toggle('metadata-visible', visible);
               mdNode.classList.toggle('metadata-hidden', !visible);
             });
             metadataLabels.forEach((label) => {
               const isChoMetadata = label.getAttribute('data-node-type') === 'cho_metadata';
-              const visible = isChoMetadata && label.getAttribute('data-parent-id') === parentId;
+              const visible = isChoMetadata && label.getAttribute('data-parent-id') === targetParent;
               label.classList.toggle('metadata-visible', visible);
               label.classList.toggle('metadata-hidden', !visible);
             });
@@ -659,7 +658,7 @@ HTML_TEMPLATE = """
           nodeElements.forEach((node) => {
             node.addEventListener('mouseenter', function () {
               cancelHideTimer();
-              const parentId = node.getAttribute('data-parent-id');
+              const parentId = node.getAttribute('data-node-id');
               const nodeType = node.getAttribute('data-node-type');
               if (nodeType === 'cho' || nodeType === 'memory') {
                 showMetadataNodesFor(parentId, nodeType);
@@ -675,7 +674,7 @@ HTML_TEMPLATE = """
             node.addEventListener('click', function (event) {
               const nodeType = node.getAttribute('data-node-type');
               if (nodeType === 'cho' || nodeType === 'memory') {
-                const parentId = node.getAttribute('data-parent-id');
+                const parentId = node.getAttribute('data-node-id');
                 if (nodeType === 'cho') {
                   event.preventDefault();
                   pinnedChoParentId = parentId || '';
@@ -829,7 +828,7 @@ COMPARE_TEMPLATE = """
               <tr>
                 <th>Field</th>
                 {% for memory in memory_columns %}
-                <th><a href="/?memory_id={{ memory.id }}&focus_cho={{ selected_cho }}&meta_view=cho">{{ memory.label }}</a></th>
+                <th><a href="/?memory_id={{ memory.id }}&focus_cho={{ selected_cho }}">{{ memory.label }}</a></th>
                 {% endfor %}
               </tr>
             </thead>
@@ -1208,13 +1207,6 @@ def _build_selected_cho_details(focus_cho):
     }
 
 
-def _resolve_meta_view(meta_view, focus_cho):
-    requested = (meta_view or "").strip().lower()
-    if requested in {"memory", "cho"}:
-        return requested
-    return "cho" if focus_cho else "memory"
-
-
 def _strip_memory_metadata_block(text):
     return re.sub(
         r'===\s*MEMORY METADATA START\s*===.*?===\s*MEMORY METADATA END\s*===\s*',
@@ -1246,14 +1238,6 @@ def _replace_metadata_tag(text, field, value, metadata_type, cho=None):
         separator = "\n" if text and not text.endswith("\n") else ""
         return f"{text}{separator}{replacement}"
     return text
-
-
-def _append_metadata_tag(text, field, value, metadata_type, cho=None):
-    if not value:
-        return text
-    tag = f'<{field} type="memory">{value}</{field}>' if metadata_type == MetadataType.MEMORY.value else f'<{field} cho="{cho}">{value}</{field}>'
-    separator = "\n" if text and not text.endswith("\n") else ""
-    return f"{text}{separator}{tag}"
 
 
 def _remove_all_cho_tags(text, cho_id):
@@ -1490,7 +1474,6 @@ def create_app(testing=False):
   def index():
     memory_id = request.args.get("memory_id", type=int)
     focus_cho = request.args.get("focus_cho", "")
-    active_meta_view = _resolve_meta_view(request.args.get("meta_view", ""), focus_cho)
     notice_level = request.args.get("notice_level", "").strip() or "success"
     notice_message = request.args.get("notice_message", "").strip()
     memories, chos, selected_memory, metadata, paragraphs, memory_metadata_items, cho_metadata_items, _ = _load_context(memory_id, focus_cho)
@@ -1510,7 +1493,6 @@ def create_app(testing=False):
       nodes=nodes,
       edges=edges,
       focus_cho=focus_cho,
-      active_meta_view=active_meta_view,
       focus_memory=f"memory:{memory_id}" if memory_id else "",
       selected_cho_details=selected_cho_details,
       notice_level=notice_level,
@@ -1629,7 +1611,6 @@ def create_app(testing=False):
       return _redirect_with_notice("index", "error", "Memory not found.")
 
     focus_cho = request.form.get("focus_cho", "").strip()
-    active_meta_view = _resolve_meta_view(request.form.get("meta_view", "memory"), focus_cho)
     if "title" in request.form:
       memory.title = request.form.get("title", "").strip() or (memory.title or f"Memory {memory.id}")
 
@@ -1699,7 +1680,7 @@ def create_app(testing=False):
       memory.title = get_memory_title(memory.text or "", memory.title or f"Memory {memory.id}")
     session.add(memory)
     session.commit()
-    redirect_kwargs = {"memory_id": memory_id, "meta_view": active_meta_view}
+    redirect_kwargs = {"memory_id": memory_id}
     if focus_cho:
       redirect_kwargs["focus_cho"] = focus_cho
     return _redirect_with_notice("index", "success", "Memory metadata saved.", **redirect_kwargs)
@@ -1711,7 +1692,6 @@ def create_app(testing=False):
       return _redirect_with_notice("index", "error", "Memory not found.")
 
     focus_cho = request.form.get("focus_cho", "").strip()
-    active_meta_view = _resolve_meta_view(request.form.get("meta_view", "memory"), focus_cho)
 
     annotation_text = request.form.get("selected_annotation_text", "").strip() or request.form.get("annotation_text", "").strip()
     annotation_field = request.form.get("annotation_field", "").strip()
@@ -1726,12 +1706,12 @@ def create_app(testing=False):
       _persist_memory_to_disk(memory)
       session.add(memory)
       session.commit()
-      redirect_kwargs = {"memory_id": memory_id, "meta_view": active_meta_view}
+      redirect_kwargs = {"memory_id": memory_id}
       if focus_cho:
         redirect_kwargs["focus_cho"] = focus_cho
       return _redirect_with_notice("index", "success", "Annotation added.", **redirect_kwargs)
 
-    redirect_kwargs = {"memory_id": memory_id, "meta_view": active_meta_view}
+    redirect_kwargs = {"memory_id": memory_id}
     if focus_cho:
       redirect_kwargs["focus_cho"] = focus_cho
     return _redirect_with_notice("index", "error", "Select text and provide CHO and field before adding an annotation.", **redirect_kwargs)
@@ -1793,7 +1773,6 @@ def create_app(testing=False):
   def graph():
     memory_id = request.args.get("memory_id", type=int)
     focus_cho = request.args.get("focus_cho", "")
-    active_meta_view = _resolve_meta_view(request.args.get("meta_view", ""), focus_cho)
     memories, chos, selected_memory, metadata, paragraphs, memory_metadata_items, cho_metadata_items, _ = _load_context(memory_id, focus_cho)
     nodes, edges = _build_graph_data(memory_id, focus_cho)
     selected_cho_details = _build_selected_cho_details(focus_cho) if focus_cho else None
@@ -1811,7 +1790,6 @@ def create_app(testing=False):
       nodes=nodes,
       edges=edges,
       focus_cho=focus_cho,
-      active_meta_view=active_meta_view,
       focus_memory=f"memory:{memory_id}" if memory_id else "",
       selected_cho_details=selected_cho_details,
       notice_level=request.args.get("notice_level", "").strip() or "success",
