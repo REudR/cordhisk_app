@@ -1,6 +1,9 @@
+import io
+import os
+import re
 import unittest
 
-from db import Memory, session
+from db import CHO, Memory, session
 from web_app import create_app
 
 
@@ -13,6 +16,17 @@ class WebAppTests(unittest.TestCase):
         response = self.client.get('/')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'CORDHISK', response.data)
+
+    def test_index_shows_import_cta_and_delete_confirmations(self):
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Import TXT memory', response.data)
+        self.assertIn(b"confirm('Delete this CHO and remove its tags from all memories?')", response.data)
+
+    def test_add_cho_metadata_dialog_removed(self):
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b'Add CHO metadata', response.data)
 
     def test_edit_memory_updates_database(self):
         memory = Memory(
@@ -34,12 +48,20 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertIn(b'Updated title', response.data)
 
-            updated = session.query(Memory).get(memory.id)
+            updated = session.get(Memory, memory.id)
             self.assertEqual(updated.title, 'Updated title')
             self.assertEqual(updated.text, 'Updated body')
+            self.assertTrue(updated.file_path.endswith('.txt'))
+            self.assertTrue(os.path.exists(updated.file_path))
+            with open(updated.file_path, encoding='utf-8') as handle:
+                self.assertEqual(handle.read(), 'Updated body')
         finally:
+            updated = session.get(Memory, memory.id)
+            file_path = updated.file_path if updated is not None else None
             session.delete(memory)
             session.commit()
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
 
     def test_graph_page_loads(self):
         response = self.client.get('/graph')
@@ -65,7 +87,7 @@ class WebAppTests(unittest.TestCase):
                 follow_redirects=True,
             )
             self.assertEqual(response.status_code, 200)
-            updated = session.query(Memory).get(memory.id)
+            updated = session.get(Memory, memory.id)
             self.assertIn('updated watch', updated.text)
         finally:
             session.delete(memory)
@@ -99,7 +121,7 @@ class WebAppTests(unittest.TestCase):
                 follow_redirects=True,
             )
             self.assertEqual(response.status_code, 200)
-            updated = session.query(Memory).get(memory.id)
+            updated = session.get(Memory, memory.id)
             self.assertNotIn('type="memory"', updated.text)
             self.assertIn('watch', updated.text)
         finally:
@@ -128,7 +150,7 @@ class WebAppTests(unittest.TestCase):
                 follow_redirects=True,
             )
             self.assertEqual(response.status_code, 200)
-            updated = session.query(Memory).get(memory.id)
+            updated = session.get(Memory, memory.id)
             self.assertEqual(updated.text, 'Before Momo after')
         finally:
             session.delete(memory)
@@ -156,8 +178,309 @@ class WebAppTests(unittest.TestCase):
                 follow_redirects=True,
             )
             self.assertEqual(response.status_code, 200)
-            updated = session.query(Memory).get(memory.id)
+            updated = session.get(Memory, memory.id)
             self.assertIn('<dc:title cho="PR75">selected phrase</dc:title>', updated.text)
+        finally:
+            session.delete(memory)
+            session.commit()
+
+    def test_search_returns_matching_memory(self):
+        memory = Memory(
+            custom_id='test-search-memory',
+            title='Search title',
+            text='The quick brown fox metadata sample',
+            file_path='demo.txt'
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.get('/search?q=brown')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'test-search-memory', response.data)
+        finally:
+            session.delete(memory)
+            session.commit()
+
+    def test_search_pagination_and_snippet_preview(self):
+        term = 'pagination-snippet-unique-token'
+        created = []
+
+        for i in range(12):
+            memory = Memory(
+                custom_id=f'test-search-page-{i}',
+                title=f'Search page {i}',
+                text=f'Prefix context {term} suffix context item {i}',
+                file_path='demo.txt'
+            )
+            session.add(memory)
+            created.append(memory)
+        session.commit()
+
+        try:
+            page_one = self.client.get(f'/search?q={term}&page=1')
+            self.assertEqual(page_one.status_code, 200)
+            self.assertIn(b'Page 1 of 2', page_one.data)
+            self.assertIn(term.encode('utf-8'), page_one.data)
+
+            page_two = self.client.get(f'/search?q={term}&page=2')
+            self.assertEqual(page_two.status_code, 200)
+            self.assertIn(b'Page 2 of 2', page_two.data)
+            self.assertIn(b'test-search-page-11', page_two.data)
+        finally:
+            for memory in created:
+                session.delete(memory)
+            session.commit()
+
+    def test_compare_returns_rows_for_selected_cho(self):
+        cho = CHO(custom_id='CHO-COMPARE', title='Compare CHO')
+        memory = Memory(
+            custom_id='test-compare-memory',
+            title='Compare memory',
+            text='This is <dc:title cho="CHO-COMPARE">linked value</dc:title> text',
+            file_path='demo.txt'
+        )
+        session.add(cho)
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.get('/compare?cho_id=CHO-COMPARE')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'test-compare-memory', response.data)
+            self.assertIn(b'linked value', response.data)
+        finally:
+            session.delete(memory)
+            session.delete(cho)
+            session.commit()
+
+    def test_export_memory_rdf_download(self):
+        memory = Memory(
+            custom_id='test-export-memory',
+            title='Export memory',
+            text='=== MEMORY METADATA START ===\n<dc:title type="memory">Export title</dc:title>\n=== MEMORY METADATA END ===\n\nBody text',
+            file_path='demo.txt'
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.get(f'/export/memory/{memory.id}.rdf')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'rdf:RDF', response.data)
+            self.assertIn(b'Export title', response.data)
+        finally:
+            session.delete(memory)
+            session.commit()
+
+    def test_export_cho_rdf_single_download(self):
+        cho = CHO(custom_id='CHO-EXPORT', title='Export CHO')
+        memory = Memory(
+            custom_id='test-export-cho-memory',
+            title='Export CHO memory',
+            text='Some <dc:title cho="CHO-EXPORT">artifact</dc:title> record',
+            file_path='demo.txt'
+        )
+        session.add(cho)
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.get(f'/export/cho?cho_id=CHO-EXPORT&mode=single&memory_id={memory.id}')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'rdf:RDF', response.data)
+            self.assertIn(b'CHO-EXPORT', response.data)
+            self.assertIn(b'artifact', response.data)
+        finally:
+            session.delete(memory)
+            session.delete(cho)
+            session.commit()
+
+    def test_create_and_delete_cho(self):
+        response = self.client.post(
+            '/chos/create',
+            data={'custom_id': 'CHO-CRUD', 'title': 'Created CHO'},
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        cho = session.query(CHO).filter(CHO.custom_id == 'CHO-CRUD').first()
+        self.assertIsNotNone(cho)
+
+        try:
+            delete_response = self.client.post(
+                f'/chos/{cho.id}/delete',
+                follow_redirects=True,
+            )
+            self.assertEqual(delete_response.status_code, 200)
+            self.assertIsNone(session.get(CHO, cho.id))
+        finally:
+            stale = session.query(CHO).filter(CHO.custom_id == 'CHO-CRUD').first()
+            if stale is not None:
+                session.delete(stale)
+                session.commit()
+
+    def test_delete_memory_route(self):
+        memory = Memory(
+            custom_id='test-delete-memory-route',
+            title='Delete me',
+            text='Body',
+            file_path='demo.txt'
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        response = self.client.post(f'/memories/{memory.id}/delete', follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Deleted memory', response.data)
+        self.assertIsNone(session.get(Memory, memory.id))
+
+    def test_import_memory_accepts_txt_only(self):
+        valid_id = 'test-import-txt'
+        invalid_id = 'test-import-invalid'
+
+        prepare_response = self.client.post(
+            '/memories/import',
+            data={
+                'stage': 'prepare',
+                'id': valid_id,
+                'file': (io.BytesIO(b'This is valid txt content'), 'memory.txt'),
+            },
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        self.assertEqual(prepare_response.status_code, 200)
+
+        temp_path_match = re.search(rb'name="temp_path" value="([^"]+)"', prepare_response.data)
+        self.assertIsNotNone(temp_path_match)
+        temp_path = temp_path_match.group(1).decode('utf-8')
+
+        valid_response = self.client.post(
+            '/memories/import',
+            data={
+                'stage': 'confirm',
+                'temp_path': temp_path,
+                'id': valid_id,
+                'dc:title': 'Imported title',
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(valid_response.status_code, 200)
+
+        imported = session.query(Memory).filter(Memory.custom_id == valid_id).first()
+        self.assertIsNotNone(imported)
+        self.assertTrue(imported.file_path.endswith('.txt'))
+        self.assertTrue(os.path.exists(imported.file_path))
+
+        try:
+            invalid_response = self.client.post(
+                '/memories/import',
+                data={
+                    'stage': 'prepare',
+                    'id': invalid_id,
+                    'dc:title': 'Invalid ext',
+                    'file': (io.BytesIO(b'Not txt'), 'memory.md'),
+                },
+                content_type='multipart/form-data',
+                follow_redirects=True,
+            )
+            self.assertEqual(invalid_response.status_code, 200)
+            invalid = session.query(Memory).filter(Memory.custom_id == invalid_id).first()
+            self.assertIsNone(invalid)
+        finally:
+            imported_now = session.query(Memory).filter(Memory.custom_id == valid_id).first()
+            if imported_now is not None:
+                if imported_now.file_path and os.path.exists(imported_now.file_path):
+                    os.remove(imported_now.file_path)
+                session.delete(imported_now)
+                session.commit()
+
+    def test_import_preserves_existing_memory_metadata_block(self):
+        memory_id = 'test-import-preserve-md'
+        existing_text = (
+            '=== MEMORY METADATA START ===\n'
+            '<dc:title type="memory">Existing title</dc:title>\n'
+            '<dc:creator type="memory">Existing creator</dc:creator>\n'
+            '=== MEMORY METADATA END ===\n\n'
+            'Body content here.'
+        )
+
+        prepare_response = self.client.post(
+            '/memories/import',
+            data={
+                'stage': 'prepare',
+                'id': memory_id,
+                'file': (io.BytesIO(existing_text.encode('utf-8')), 'memory.txt'),
+            },
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        self.assertEqual(prepare_response.status_code, 200)
+        self.assertIn(b'Existing title', prepare_response.data)
+
+        temp_path_match = re.search(rb'name="temp_path" value="([^"]+)"', prepare_response.data)
+        self.assertIsNotNone(temp_path_match)
+        temp_path = temp_path_match.group(1).decode('utf-8')
+
+        response = self.client.post(
+            '/memories/import',
+            data={
+                'stage': 'confirm',
+                'temp_path': temp_path,
+                'id': memory_id,
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        imported = session.query(Memory).filter(Memory.custom_id == memory_id).first()
+        self.assertIsNotNone(imported)
+
+        try:
+            self.assertIn('<dc:title type="memory">Existing title</dc:title>', imported.text)
+            self.assertIn('<dc:creator type="memory">Existing creator</dc:creator>', imported.text)
+            self.assertIn(b'Preserved 2 existing memory metadata fields', response.data)
+            self.assertTrue(imported.file_path.endswith('.txt'))
+            self.assertTrue(os.path.exists(imported.file_path))
+        finally:
+            imported_now = session.query(Memory).filter(Memory.custom_id == memory_id).first()
+            if imported_now is not None:
+                if imported_now.file_path and os.path.exists(imported_now.file_path):
+                    os.remove(imported_now.file_path)
+                session.delete(imported_now)
+                session.commit()
+
+    def test_delete_cho_metadata_does_not_duplicate_text(self):
+        memory = Memory(
+            custom_id='test-delete-cho-md',
+            title='Delete CHO metadata',
+            text='Before <dc:title cho="PR75">watch</dc:title> after',
+            file_path='demo.txt'
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.post(
+                f'/memories/{memory.id}/edit',
+                data={
+                    'title': 'Delete CHO metadata',
+                    'text': 'Before <dc:title cho="PR75">watch</dc:title> after',
+                    'delete_cho_metadata[PR75][dc:title]': '1',
+                    'cho_metadata[PR75][dc:title]': 'watch',
+                },
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            updated = session.get(Memory, memory.id)
+            self.assertNotIn('<dc:title cho="PR75">', updated.text)
+            self.assertEqual(updated.text.count('watch'), 1)
         finally:
             session.delete(memory)
             session.commit()
