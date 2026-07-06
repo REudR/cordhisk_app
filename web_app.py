@@ -244,7 +244,9 @@ HTML_TEMPLATE = """
         {% if selected_memory %}
         <div class="grid">
           <div class="card">
+            {% if not focus_cho %}
             <h2>{{ selected_memory.custom_id or selected_memory.id }} — {{ selected_memory.title or ('Memory ' ~ selected_memory.id) }}</h2>
+            {% endif %}
             {% if not focus_cho %}
             <form action="/memories/{{ selected_memory.id }}/annotate" method="post">
               <h3>Annotate highlighted memory text</h3>
@@ -311,8 +313,8 @@ HTML_TEMPLATE = """
                     {% endfor %}
                     {% for node in nodes %}
                     <a href="{{ node.link }}">
-                      <circle class="graph-node node {{ node.group }} {% if node.id == ('cho:' ~ focus_cho) or node.id == focus_memory %}focused{% endif %} {% if node.group in ['memory_metadata','cho_metadata'] %}metadata-hidden{% endif %}" data-node-id="{{ node.id }}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-details="{{ node.details or '' }}" title="{{ node.details or '' }}" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius or 32 }}"></circle>
-                      <text class="label {% if node.group in ['memory_metadata','cho_metadata'] %}graph-metadata-label metadata-hidden{% endif %}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" x="{{ node.x }}" y="{{ node.y + 6 }}" text-anchor="middle">{{ node.label }}</text>
+                      <circle class="graph-node node {{ node.group }} {% if node.id == ('cho:' ~ focus_cho) or node.id == focus_memory %}focused{% endif %} {% if node.group in ['memory_metadata','cho_metadata'] %}{% if focus_cho and node.parent_id == ('cho:' ~ focus_cho) %}metadata-visible{% else %}metadata-hidden{% endif %}{% endif %}" data-node-id="{{ node.id }}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-details="{{ node.details or '' }}" title="{{ node.details or '' }}" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius or 32 }}"></circle>
+                      <text class="label {% if node.group in ['memory_metadata','cho_metadata'] %}graph-metadata-label {% if focus_cho and node.parent_id == ('cho:' ~ focus_cho) %}metadata-visible{% else %}metadata-hidden{% endif %}{% endif %}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" x="{{ node.x }}" y="{{ node.y + 6 }}" text-anchor="middle">{{ node.label }}</text>
                     </a>
                     {% endfor %}
                   </g>
@@ -654,6 +656,13 @@ HTML_TEMPLATE = """
             });
           };
 
+          // If metadata nodes are already visible from server state, display one value immediately.
+          const initiallyVisibleMetadataNode = metadataNodes.find((node) => node.classList.contains('metadata-visible'));
+          if (initiallyVisibleMetadataNode) {
+            setHoverValue(initiallyVisibleMetadataNode.getAttribute('data-details'));
+            pinnedChoParentId = initiallyVisibleMetadataNode.getAttribute('data-parent-id') || '';
+          }
+
           const nodeElements = Array.from(document.querySelectorAll('.graph-node'));
           nodeElements.forEach((node) => {
             node.addEventListener('mouseenter', function () {
@@ -686,6 +695,17 @@ HTML_TEMPLATE = """
               }
             });
           });
+
+          // If a CHO is already focused from URL state, reveal and pin its metadata nodes.
+          const focusedChoNode = document.querySelector('.graph-node.focused[data-node-type="cho"]');
+          if (focusedChoNode) {
+            const focusedChoId = focusedChoNode.getAttribute('data-node-id') || '';
+            if (focusedChoId) {
+              pinnedChoParentId = focusedChoId;
+              showMetadataNodesFor(focusedChoId, 'cho');
+              setHoverValue(focusedChoNode.getAttribute('data-details'));
+            }
+          }
 
           metadataNodes.forEach((node) => {
             node.addEventListener('mouseenter', function () {
