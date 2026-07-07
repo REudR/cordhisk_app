@@ -7,24 +7,24 @@ HTML_TEMPLATE = """
     <title>CORDHISK Web</title>
     <style>
       :root {
-        --bg: #eef3fb;
-        --ink: #1f2937;
-        --brand: #1d4ed8;
-        --brand-2: #0ea5e9;
+        --bg: #f2f6f8;
+        --ink: #1b1f24;
+        --brand: #0072b2;
+        --brand-2: #009e73;
         --surface: #ffffff;
-        --line: #dbe4f0;
+        --line: #cfd8df;
         --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
       }
-      body { font-family: "Avenir Next", "Segoe UI", sans-serif; margin: 0; background: radial-gradient(circle at 10% 10%, #f8fbff 0%, var(--bg) 52%, #e4edf9 100%); color: var(--ink); }
+      body { font-family: "Avenir Next", "Segoe UI", sans-serif; margin: 0; background: radial-gradient(circle at 10% 10%, #f9fbfc 0%, var(--bg) 52%, #e8eef2 100%); color: var(--ink); }
       .shell { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
-      .sidebar { background: linear-gradient(180deg, #0f172a 0%, #16213b 100%); color: white; padding: 20px; }
+      .sidebar { background: linear-gradient(180deg, #0f3b5a 0%, #0d5660 100%); color: white; padding: 20px; }
       .content { padding: 24px; }
       .card { background: var(--surface); border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: var(--shadow); border: 1px solid rgba(219, 228, 240, 0.7); }
-      a { color: #2563eb; text-decoration: none; }
+      a { color: #005b8f; text-decoration: none; }
       .pill { display: inline-flex; align-items: center; margin: 3px; padding: 5px 10px; border-radius: 999px; background: #e2e8f0; font-size: 12px; border: 1px solid transparent; }
-      .pill.memory { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
-      .pill.cho { background: #dcfce7; color: #166534; border-color: #86efac; }
-      .pill.add { background: #2563eb; color: white; border-color: #1d4ed8; cursor: pointer; font-weight: 700; min-width: 28px; justify-content: center; }
+      .pill.memory { background: #d8ebf7; color: #005b8f; border-color: #9fcae2; }
+      .pill.cho { background: #d8f1e6; color: #0f6f55; border-color: #9ad7c2; }
+      .pill.add { background: #0072b2; color: white; border-color: #005b8f; cursor: pointer; font-weight: 700; min-width: 28px; justify-content: center; }
       .pill.selected { box-shadow: 0 0 0 2px #0f172a inset; }
       .text-view { font-family: inherit; line-height: 1.7; white-space: normal; }
       .text-view p { margin: 0 0 10px; }
@@ -56,12 +56,13 @@ HTML_TEMPLATE = """
       svg { width: 100%; min-width: 1000px; height: auto; border: 0; border-radius: 8px; background: white; cursor: grab; }
       svg.dragging { cursor: grabbing; }
       .node { stroke: #334155; stroke-width: 1.5; }
-      .memory { fill: #60a5fa; }
-      .cho { fill: #34d399; }
-      .memory_metadata { fill: #a3e635; }
-      .cho_metadata { fill: #f59e0b; }
+      .memory { fill: #56b4e9; }
+      .cho { fill: #009e73; }
+      .memory_metadata { fill: #e69f00; }
+      .cho_metadata { fill: #d55e00; }
       .metadata-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
       .metadata-visible { opacity: 1; visibility: visible; pointer-events: auto; }
+      .metadata-collapsed { opacity: 0; visibility: hidden; pointer-events: none; }
       .focused { stroke: #ef4444; stroke-width: 3; }
       .label { font-size: 12px; fill: #0f172a; pointer-events: none; }
       .result-table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -90,6 +91,8 @@ HTML_TEMPLATE = """
       .metadata-card { position: sticky; top: 12px; }
       .metadata-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
       .metadata-inline-edit { display: none; margin-top: 10px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px; background: #f0f7ff; }
+      .metadata-inline-edit-actions { margin-top: 8px; }
+      .annotation-inline-edit { display: none; margin-top: 10px; padding: 10px; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; }
       .memory-mode-hide { display: none; }
       .sidebar-list { list-style: none; margin: 0; padding: 0; }
       .sidebar-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
@@ -103,14 +106,20 @@ HTML_TEMPLATE = """
       .sidebar-card { background: #f8fbff; }
       .sidebar-card h3 { color: #0f172a; }
       .sidebar-button-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
-      .side-btn, .side-btn:visited { display: inline-flex; align-items: center; justify-content: center; text-align: center; min-height: 34px; padding: 6px; border-radius: 8px; color: white; background: #0ea5e9; border: 0; font-size: 12px; font-weight: 600; }
-      .side-btn.alt { background: #1d4ed8; }
+      .side-btn, .side-btn:visited { display: inline-flex; align-items: center; justify-content: center; text-align: center; min-height: 34px; padding: 6px; border-radius: 8px; color: white; background: #0072b2; border: 0; font-size: 12px; font-weight: 600; }
+      .side-btn.alt { background: #009e73; }
       .side-btn.disabled { pointer-events: none; opacity: 0.6; }
+      .menu-toggle { display: block; width: 100%; margin-bottom: 10px; background: #0072b2; }
+      .menu-toggle.active { background: #009e73; }
+      .sidebar-menu.hidden { display: none; }
+      .selection-value { font-style: italic; font-weight: 700; }
+      .cho-tags-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+      .cho-tags-head h4 { margin: 0; }
       .list-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
       .list-selector button { background: #334155; font-size: 12px; padding: 6px 8px; }
-      .list-selector button.active { background: #0ea5e9; }
+      .list-selector button.active { background: #0072b2; }
       .list-panel.hidden { display: none; }
-      .inline-annotation-row { display: grid; grid-template-columns: minmax(260px, 2fr) minmax(170px, 1fr) minmax(170px, 1fr) auto; gap: 8px; align-items: end; }
+      .inline-annotation-row { display: grid; grid-template-columns: minmax(170px, 1fr) minmax(170px, 1fr) auto; gap: 8px; align-items: end; }
       .inline-annotation-row > div { min-width: 0; }
       .inline-annotation-row label { display: block; font-size: 12px; margin-bottom: 3px; }
       .inline-annotation-row input, .inline-annotation-row select { margin-bottom: 0; }
@@ -121,7 +130,14 @@ HTML_TEMPLATE = """
         .sidebar { border-bottom: 1px solid #334155; }
         .grid { grid-template-columns: 1fr; }
         .metadata-card { position: static; }
-        .sidebar-button-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .menu-toggle { display: block; }
+        .sidebar-menu.hidden { display: none; }
+        .sidebar-button-grid { grid-template-columns: 1fr; }
+        .side-btn, .side-btn:visited, .sidebar-button-grid button { width: 100%; }
+        .content { padding: 14px; }
+        .card { padding: 12px; }
+        .graph-card { min-height: auto; }
+        svg { min-width: 680px; }
         .inline-annotation-row { grid-template-columns: 1fr; }
       }
     </style>
@@ -131,48 +147,51 @@ HTML_TEMPLATE = """
       <aside class="sidebar">
         <h2>CORDHISK</h2>
         <p>Web-based metadata workspace for memories and cultural heritage objects.</p>
-        <div class="sidebar-button-grid">
-          <a class="side-btn" href="/memories/import">Import TXT memory</a>
-          <a class="side-btn" href="/search">Search</a>
-          <a class="side-btn" href="/compare">Compare</a>
-          <button type="button" class="side-btn alt" id="open-add-cho">Add CHO</button>
-          <button type="button" class="side-btn alt" id="open-export-cho">Download CHO RDF</button>
-          {% if selected_memory %}
-          <a class="side-btn alt" href="/export/memory/{{ selected_memory.id }}.rdf">Download Memory RDF</a>
-          {% else %}
-          <span class="side-btn alt disabled">Download Memory RDF</span>
-          {% endif %}
-        </div>
-        <div class="sidebar-action">
-          <form id="add-cho-pop" class="sidebar-pop" action="/chos/create" method="post">
-            <label>CHO code</label>
-            <input name="custom_id" placeholder="e.g. PR99" required>
-            <label>Title</label>
-            <input name="title" placeholder="CHO title">
+        <button type="button" class="menu-toggle" id="toggle-menu">Menu</button>
+        <div class="sidebar-menu hidden" id="sidebar-menu">
+          <div class="sidebar-button-grid">
+            <a class="side-btn" href="/memories/import">Import TXT memory</a>
+            <a class="side-btn" href="/search">Search</a>
+            <a class="side-btn" href="/compare">Compare</a>
+            <button type="button" class="side-btn alt" id="open-add-cho">Add CHO</button>
+            <button type="button" class="side-btn alt" id="open-export-cho">Download CHO RDF</button>
             {% if selected_memory %}
-            <input type="hidden" name="memory_id" value="{{ selected_memory.id }}">
+            <a class="side-btn alt" href="/export/memory/{{ selected_memory.id }}.rdf">Download Memory RDF</a>
+            {% else %}
+            <span class="side-btn alt disabled">Download Memory RDF</span>
             {% endif %}
-            <button type="submit">Create CHO</button>
-          </form>
-        </div>
-        <div class="sidebar-action">
-          <form id="export-cho-pop" class="sidebar-pop" action="/export/cho" method="get">
-            <label>CHO</label>
-            <select name="cho_id" required>
-              {% for cho in chos %}
-              <option value="{{ cho.custom_id or cho.id }}">{{ cho.title or cho.custom_id or cho.id }}</option>
-              {% endfor %}
-            </select>
-            <label>Mode</label>
-            <select name="mode">
-              <option value="single">Single memory</option>
-              <option value="all">All memories</option>
-            </select>
-            {% if selected_memory %}
-            <input type="hidden" name="memory_id" value="{{ selected_memory.id }}">
-            {% endif %}
-            <button type="submit">Download</button>
-          </form>
+          </div>
+          <div class="sidebar-action">
+            <form id="add-cho-pop" class="sidebar-pop" action="/chos/create" method="post">
+              <label>CHO code</label>
+              <input name="custom_id" placeholder="e.g. PR99" required>
+              <label>Title</label>
+              <input name="title" placeholder="CHO title">
+              {% if selected_memory %}
+              <input type="hidden" name="memory_id" value="{{ selected_memory.id }}">
+              {% endif %}
+              <button type="submit">Create CHO</button>
+            </form>
+          </div>
+          <div class="sidebar-action">
+            <form id="export-cho-pop" class="sidebar-pop" action="/export/cho" method="get">
+              <label>CHO</label>
+              <select name="cho_id" required>
+                {% for cho in chos %}
+                <option value="{{ cho.custom_id or cho.id }}">{{ cho.title or cho.custom_id or cho.id }}</option>
+                {% endfor %}
+              </select>
+              <label>Mode</label>
+              <select name="mode">
+                <option value="single">Single memory</option>
+                <option value="all">All memories</option>
+              </select>
+              {% if selected_memory %}
+              <input type="hidden" name="memory_id" value="{{ selected_memory.id }}">
+              {% endif %}
+              <button type="submit">Download</button>
+            </form>
+          </div>
         </div>
         <div class="list-selector">
           <button type="button" id="show-memories-btn" class="active">Memories</button>
@@ -218,9 +237,8 @@ HTML_TEMPLATE = """
             {% if not focus_cho %}
             <form action="/memories/{{ selected_memory.id }}/annotate" method="post">
               <h3>Annotate highlighted memory text</h3>
-              <p>Select text in the highlighted visualisation below, then wrap it as a metadata annotation.</p>
               <div class="annotation-toolbar">
-                <button type="button" id="capture-selection">Use selected text</button>
+                <button type="button" class="pill add" id="open-add-cho-tag" title="Add CHO tag">+</button>
                 <span id="selection-preview">No selection yet</span>
               </div>
               <div id="annotation-source" class="text-view" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; user-select: text;">
@@ -236,11 +254,9 @@ HTML_TEMPLATE = """
                 </p>
                 {% endfor %}
               </div>
+              <input id="selected-annotation-text" name="selected_annotation_text" type="hidden">
+              <div id="add-cho-tag-box" class="annotation-inline-edit">
               <div class="inline-annotation-row">
-                <div>
-                  <label>Selected text</label>
-                  <input id="selected-annotation-text" name="selected_annotation_text" placeholder="Selected text">
-                </div>
                 <div>
                   <label>CHO</label>
                   <select name="annotation_cho">
@@ -260,6 +276,7 @@ HTML_TEMPLATE = """
                 <div>
                   <button type="submit">Add annotation</button>
                 </div>
+              </div>
               </div>
               <input type="hidden" name="focus_cho" value="{{ focus_cho or '' }}">
             </form>
@@ -281,8 +298,8 @@ HTML_TEMPLATE = """
                     {% endfor %}
                     {% for node in nodes %}
                     <a href="{{ node.link }}">
-                      <circle class="graph-node node {{ node.group }} {% if node.id == ('cho:' ~ focus_cho) or node.id == focus_memory %}focused{% endif %} {% if node.group in ['memory_metadata','cho_metadata'] %}{% if focus_cho and node.parent_id == ('cho:' ~ focus_cho) %}metadata-visible{% else %}metadata-hidden{% endif %}{% endif %}" data-node-id="{{ node.id }}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-details="{{ node.details or '' }}" title="{{ node.details or '' }}" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius or 32 }}"></circle>
-                      <text class="label {% if node.group in ['memory_metadata','cho_metadata'] %}graph-metadata-label {% if focus_cho and node.parent_id == ('cho:' ~ focus_cho) %}metadata-visible{% else %}metadata-hidden{% endif %}{% endif %}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" x="{{ node.x }}" y="{{ node.y + 6 }}" text-anchor="middle">{{ node.label }}</text>
+                      <circle class="graph-node node {{ node.group }} {% if node.id == ('cho:' ~ focus_cho) or node.id == focus_memory %}focused{% endif %} {% if node.group in ['memory_metadata','cho_metadata'] %}metadata-visible{% endif %}" data-node-id="{{ node.id }}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-memory-owner-id="{{ node.memory_owner_id or '' }}" data-details="{{ node.details or '' }}" title="{{ node.details or '' }}" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius or 32 }}"></circle>
+                      <text class="label {% if node.group in ['memory_metadata','cho_metadata'] %}graph-metadata-label metadata-visible{% endif %}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-memory-owner-id="{{ node.memory_owner_id or '' }}" x="{{ node.x }}" y="{{ node.y + 6 }}" text-anchor="middle">{{ node.label }}</text>
                     </a>
                     {% endfor %}
                   </g>
@@ -292,9 +309,6 @@ HTML_TEMPLATE = """
           </div>
           <div>
             <div class="card metadata-card">
-              <h3>Metadata Panel</h3>
-              <p>Metadata shown depends on selection: click a memory for memory metadata or click a CHO for CHO metadata grouped by memory.</p>
-
               {% if focus_cho and selected_cho_details %}
                 <h4>CHO {{ selected_cho_details.label }} — {{ selected_cho_details.title }}</h4>
                 <p>Metadata grouped by memory for the selected CHO.</p>
@@ -343,10 +357,16 @@ HTML_TEMPLATE = """
                     </select>
                     <label>Value</label>
                     <input name="new_memory_metadata_value" placeholder="New value">
+                      <div class="metadata-inline-edit-actions">
+                        <button type="submit">Save metadata changes</button>
+                      </div>
                   </div>
 
                   <div class="tag-section">
-                    <h4>CHO tags in this memory</h4>
+                      <div class="cho-tags-head">
+                        <button type="submit" name="remove_selected" value="1" onclick="return confirm('Remove selected metadata tags?');">Remove selected tags</button>
+                        <h4>CHO tags in this memory</h4>
+                      </div>
                     <div class="tag-list">
                       {% for md in cho_metadata_items %}
                       <label class="tag-selector">
@@ -357,11 +377,6 @@ HTML_TEMPLATE = """
                       <span class="pill cho">No CHO metadata</span>
                       {% endfor %}
                     </div>
-                  </div>
-
-                  <div class="metadata-actions">
-                    <button type="submit">Save metadata changes</button>
-                    <button type="submit" name="remove_selected" value="1" onclick="return confirm('Remove selected metadata tags?');">Remove selected tags</button>
                   </div>
                 </form>
               {% endif %}
@@ -377,10 +392,14 @@ HTML_TEMPLATE = """
     </div>
     <script>
       document.addEventListener('DOMContentLoaded', function () {
+        const isChoView = {{ 'true' if focus_cho else 'false' }};
         const source = document.getElementById('annotation-source');
         const target = document.getElementById('selected-annotation-text');
         const preview = document.getElementById('selection-preview');
-        const button = document.getElementById('capture-selection');
+        const addChoTagButton = document.getElementById('open-add-cho-tag');
+        const addChoTagBox = document.getElementById('add-cho-tag-box');
+        const menuToggleButton = document.getElementById('toggle-menu');
+        const sidebarMenu = document.getElementById('sidebar-menu');
         const svg = document.getElementById('graph-svg');
         const graphContent = document.getElementById('graph-content');
         const hoverValueBox = document.getElementById('graph-hover-value');
@@ -411,15 +430,51 @@ HTML_TEMPLATE = """
           const selection = window.getSelection().toString().trim();
           if (!selection) {
             preview.textContent = 'No selection yet';
+            if (target) {
+              target.value = '';
+            }
             return;
           }
-          target.value = selection;
-          preview.textContent = 'Selection: ' + selection;
+          if (target) {
+            target.value = selection;
+          }
+          preview.innerHTML = 'Selection: <span class="selection-value"></span>';
+          const valueSpan = preview.querySelector('.selection-value');
+          if (valueSpan) {
+            valueSpan.textContent = selection;
+          }
         }
 
-        if (button && source && target && preview) {
-          button.addEventListener('click', captureSelection);
+        if (source && target && preview) {
           source.addEventListener('mouseup', function () { setTimeout(captureSelection, 0); });
+        }
+
+        if (addChoTagButton && addChoTagBox) {
+          addChoTagButton.addEventListener('click', function () {
+            captureSelection();
+            const isVisible = addChoTagBox.style.display === 'block';
+            addChoTagBox.style.display = isVisible ? 'none' : 'block';
+          });
+        }
+
+        if (menuToggleButton && sidebarMenu) {
+          const syncMenu = function () {
+            const mobile = window.matchMedia('(max-width: 980px)').matches;
+            if (!mobile) {
+              sidebarMenu.classList.remove('hidden');
+              menuToggleButton.classList.remove('active');
+              return;
+            }
+            if (!menuToggleButton.classList.contains('active')) {
+              sidebarMenu.classList.add('hidden');
+            }
+          };
+          menuToggleButton.addEventListener('click', function () {
+            const open = menuToggleButton.classList.toggle('active');
+            sidebarMenu.classList.toggle('hidden', !open);
+          });
+          window.addEventListener('resize', syncMenu);
+          syncMenu();
         }
 
         document.querySelectorAll('.tag-selector input').forEach(function (input) {
@@ -531,8 +586,6 @@ HTML_TEMPLATE = """
               zoomLevel = 1;
               panX = 0;
               panY = 0;
-              pinnedChoParentId = '';
-              hideMetadataNodes();
               setHoverValue('Hover CHO or metadata nodes to inspect values.');
               applyTransform();
             });
@@ -571,125 +624,76 @@ HTML_TEMPLATE = """
           });
 
           const metadataNodes = Array.from(document.querySelectorAll('.graph-node[data-node-type="memory_metadata"], .graph-node[data-node-type="cho_metadata"]'));
-          const metadataLabels = Array.from(document.querySelectorAll('.graph-metadata-label'));
-          let hideTimer = null;
-          let pinnedChoParentId = '';
+          const metadataLabels = Array.from(document.querySelectorAll('.graph-metadata-label[data-node-type="memory_metadata"], .graph-metadata-label[data-node-type="cho_metadata"]'));
+          const collapsedByMemory = new Set();
+          const collapsedByCho = new Set();
           const setHoverValue = (text) => {
             if (hoverValueBox) {
               hoverValueBox.textContent = text || 'No metadata details available.';
             }
           };
-          const cancelHideTimer = () => {
-            if (hideTimer) {
-              clearTimeout(hideTimer);
-              hideTimer = null;
-            }
-          };
-          const scheduleHideMetadataNodes = () => {
-            if (pinnedChoParentId) {
-              return;
-            }
-            cancelHideTimer();
-            hideTimer = setTimeout(() => {
-              hideMetadataNodes();
-            }, 120);
-          };
-          const hideMetadataNodes = () => {
-            metadataNodes.forEach((mdNode) => {
-              mdNode.classList.remove('metadata-visible');
-              mdNode.classList.add('metadata-hidden');
-            });
-            metadataLabels.forEach((label) => {
-              label.classList.remove('metadata-visible');
-              label.classList.add('metadata-hidden');
-            });
-          };
-          const showMetadataNodesFor = (parentId, nodeType) => {
-            hideMetadataNodes();
-            if (nodeType !== 'cho') {
-              return;
-            }
-            const targetParent = parentId || '';
-            metadataNodes.forEach((mdNode) => {
-              const isChoMetadata = mdNode.getAttribute('data-node-type') === 'cho_metadata';
-              const visible = isChoMetadata && mdNode.getAttribute('data-parent-id') === targetParent;
-              mdNode.classList.toggle('metadata-visible', visible);
-              mdNode.classList.toggle('metadata-hidden', !visible);
-            });
-            metadataLabels.forEach((label) => {
-              const isChoMetadata = label.getAttribute('data-node-type') === 'cho_metadata';
-              const visible = isChoMetadata && label.getAttribute('data-parent-id') === targetParent;
-              label.classList.toggle('metadata-visible', visible);
-              label.classList.toggle('metadata-hidden', !visible);
+          const applyCollapsedState = () => {
+            const allMetadata = metadataNodes.concat(metadataLabels);
+            allMetadata.forEach((item) => {
+              const ownerMemoryId = item.getAttribute('data-memory-owner-id') || '';
+              const ownerChoId = item.getAttribute('data-parent-id') || '';
+              const collapsed = isChoView ? collapsedByMemory.has(ownerMemoryId) : collapsedByCho.has(ownerChoId);
+              item.classList.toggle('metadata-collapsed', collapsed);
             });
           };
 
-          // If metadata nodes are already visible from server state, display one value immediately.
           const initiallyVisibleMetadataNode = metadataNodes.find((node) => node.classList.contains('metadata-visible'));
           if (initiallyVisibleMetadataNode) {
             setHoverValue(initiallyVisibleMetadataNode.getAttribute('data-details'));
-            pinnedChoParentId = initiallyVisibleMetadataNode.getAttribute('data-parent-id') || '';
           }
 
           const nodeElements = Array.from(document.querySelectorAll('.graph-node'));
           nodeElements.forEach((node) => {
             node.addEventListener('mouseenter', function () {
-              cancelHideTimer();
-              const parentId = node.getAttribute('data-node-id');
-              const nodeType = node.getAttribute('data-node-type');
-              if (nodeType === 'cho' || nodeType === 'memory') {
-                showMetadataNodesFor(parentId, nodeType);
-              }
               setHoverValue(node.getAttribute('data-details'));
-            });
-            node.addEventListener('mouseleave', function () {
-              const nodeType = node.getAttribute('data-node-type');
-              if (nodeType === 'cho') {
-                scheduleHideMetadataNodes();
-              }
             });
             node.addEventListener('click', function (event) {
               const nodeType = node.getAttribute('data-node-type');
-              if (nodeType === 'cho' || nodeType === 'memory') {
-                const parentId = node.getAttribute('data-node-id');
-                if (nodeType === 'cho') {
-                  event.preventDefault();
-                  pinnedChoParentId = parentId || '';
+              const nodeId = node.getAttribute('data-node-id') || '';
+              if (isChoView && nodeType === 'memory') {
+                event.preventDefault();
+                if (collapsedByMemory.has(nodeId)) {
+                  collapsedByMemory.delete(nodeId);
                 } else {
-                  pinnedChoParentId = '';
+                  collapsedByMemory.add(nodeId);
                 }
-                showMetadataNodesFor(parentId, nodeType);
+                applyCollapsedState();
+                setHoverValue(node.getAttribute('data-details'));
+                return;
+              }
+              if (!isChoView && nodeType === 'cho') {
+                event.preventDefault();
+                if (collapsedByCho.has(nodeId)) {
+                  collapsedByCho.delete(nodeId);
+                } else {
+                  collapsedByCho.add(nodeId);
+                }
+                applyCollapsedState();
+                setHoverValue(node.getAttribute('data-details'));
+                return;
+              }
+              if (nodeType === 'cho' || nodeType === 'memory') {
                 setHoverValue(node.getAttribute('data-details'));
               }
             });
           });
 
-          // If a CHO is already focused from URL state, reveal and pin its metadata nodes.
-          const focusedChoNode = document.querySelector('.graph-node.focused[data-node-type="cho"]');
-          if (focusedChoNode) {
-            const focusedChoId = focusedChoNode.getAttribute('data-node-id') || '';
-            if (focusedChoId) {
-              pinnedChoParentId = focusedChoId;
-              showMetadataNodesFor(focusedChoId, 'cho');
-              setHoverValue(focusedChoNode.getAttribute('data-details'));
-            }
-          }
-
           metadataNodes.forEach((node) => {
             node.addEventListener('mouseenter', function () {
-              cancelHideTimer();
               setHoverValue(node.getAttribute('data-details'));
             });
             node.addEventListener('click', function (event) {
               event.preventDefault();
               setHoverValue(node.getAttribute('data-details'));
             });
-            node.addEventListener('mouseleave', function () {
-              if (!pinnedChoParentId) {
-                scheduleHideMetadataNodes();
-              }
-            });
           });
+
+          applyCollapsedState();
         }
       });
     </script>

@@ -31,6 +31,16 @@ MEMORY_FIELDS = [
 ]
 
 
+def _metadata_label(field_name):
+  if not field_name:
+    return "Metadata"
+  for group in METADATA_FIELDS.values():
+    label = group.get("fields", {}).get(field_name, {}).get("label")
+    if label:
+      return label
+  return field_name.split(":")[-1].replace("_", " ").replace("-", " ").title()
+
+
 def _normalize_text(text):
     text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"[ \t]+", " ", text)
@@ -183,12 +193,24 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
     edges = []
     seen_nodes = {}
     cho_metadata_positions = {}
+    cho_base_y = {}
 
-    def add_node(node_id, label, group, x, y, link, radius=32, parent_id="", details=""):
-        if node_id not in seen_nodes:
-            seen_nodes[node_id] = {"id": node_id, "label": label, "group": group, "x": x, "y": y, "link": link, "radius": radius, "parent_id": parent_id, "details": details}
-            nodes.append(seen_nodes[node_id])
-        return seen_nodes[node_id]
+    def add_node(node_id, label, group, x, y, link, radius=32, parent_id="", details="", memory_owner_id=""):
+      if node_id not in seen_nodes:
+        seen_nodes[node_id] = {
+          "id": node_id,
+          "label": label,
+          "group": group,
+          "x": x,
+          "y": y,
+          "link": link,
+          "radius": radius,
+          "parent_id": parent_id,
+          "details": details,
+          "memory_owner_id": memory_owner_id,
+        }
+        nodes.append(seen_nodes[node_id])
+      return seen_nodes[node_id]
 
     def matches_cho(metadata_items, cho_id):
         for md in metadata_items:
@@ -208,17 +230,35 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
         memories = relevant_memories
         cho_rows = [target_cho] if target_cho is not None else []
     elif selected_memory_id is not None:
-      selected_memory = session.get(Memory, selected_memory_id)
-      memories = [selected_memory] if selected_memory is not None else []
-      cho_rows = []
-      if selected_memory is not None:
-        for md in extract_metadata(selected_memory.text or ""):
-          if md.get("type") == MetadataType.CHO.value and md.get("cho"):
-            cho_id = md.get("cho")
-            cho = next((item for item in session.query(CHO).order_by(CHO.id).all() if str(item.custom_id) == str(cho_id) or str(item.id) == str(cho_id)), None)
-            if cho is not None:
-              cho_rows.append(cho)
-      cho_rows = list(dict.fromkeys(cho_rows))
+        selected_memory = session.get(Memory, selected_memory_id)
+        memories = [selected_memory] if selected_memory is not None else []
+        cho_rows = []
+        if selected_memory is not None:
+            for md in extract_metadata(selected_memory.text or ""):
+                if md.get("type") == MetadataType.CHO.value and md.get("cho"):
+                    cho_id = md.get("cho")
+                    cho = next((item for item in session.query(CHO).order_by(CHO.id).all() if str(item.custom_id) == str(cho_id) or str(item.id) == str(cho_id)), None)
+                    if cho is not None:
+                        cho_rows.append(cho)
+        cho_rows = list(dict.fromkeys(cho_rows))
+
+    if cho_rows:
+        row_gap = 70
+        cursor_y = 140
+        for cho in cho_rows:
+            cho_key = str(cho.custom_id or cho.id)
+            cho_refs = {str(cho.id), cho_key}
+            unique_rows = set()
+            for memory in memories:
+                for md in extract_metadata(memory.text or ""):
+                    if md.get("type") != MetadataType.CHO.value:
+                        continue
+                    if str(md.get("cho")) not in cho_refs:
+                        continue
+                    unique_rows.add((md.get("field") or "metadata", str(md.get("value", ""))))
+            cho_base_y[cho_key] = cursor_y
+            band_height = max(220, 90 + len(unique_rows) * row_gap)
+            cursor_y += band_height
 
     for index, memory in enumerate(memories):
         memory_link = f"/?memory_id={memory.id}" if memory.id else "/"
@@ -256,22 +296,24 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
                 cho = next((item for item in cho_rows if str(item.custom_id) == str(cho_id) or str(item.id) == str(cho_id)), None)
                 if cho is None:
                     continue
-                cho_index = cho_rows.index(cho)
+                cho_key = str(cho.custom_id or cho.id)
+                cho_y = cho_base_y.get(cho_key, 140)
                 cho_link = f"/?memory_id={selected_memory_id or ''}&focus_cho={cho.custom_id or cho.id}" if selected_memory_id is not None else f"/?focus_cho={cho.custom_id or cho.id}"
+                field_name = md.get("field", "")
+                display_field = _metadata_label(field_name)
                 cho_node = add_node(
                     f"cho:{cho.custom_id or cho.id}",
                     cho.title or cho.custom_id or str(cho.id),
                     "cho",
                     760,
-                    140 + cho_index * 220,
+                  cho_y,
                     cho_link,
                     36,
                     "",
-                    f"{cho.title or cho.custom_id or str(cho.id)}: {md.get('field', '')} = {md.get('value', '')}",
+                  f"{cho.title or cho.custom_id or str(cho.id)}: {display_field} = {md.get('value', '')}",
                 )
-                metadata_label = md.get("field") or "metadata"
-                cho_key = str(cho.custom_id or cho.id)
-                position_key = (cho_key, metadata_label, str(md.get("value", "")))
+                metadata_label = display_field
+                position_key = (cho_key, field_name or "metadata", str(md.get("value", "")))
                 cho_column_positions = cho_metadata_positions.setdefault(cho_key, {})
                 metadata_row = cho_column_positions.setdefault(position_key, len(cho_column_positions))
                 metadata_node = add_node(
@@ -279,11 +321,12 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
                     metadata_label,
                     "cho_metadata",
                     600,
-                    140 + cho_index * 220 + metadata_row * 70,
+                  cho_y + metadata_row * 70,
                     cho_link,
                     24,
                     f"cho:{cho.custom_id or cho.id}",
                     f"{metadata_label}: {md.get('value', '')}",
+                  f"memory:{memory.id}",
                 )
                 edges.extend([(memory_node, metadata_node), (metadata_node, cho_node)])
 
@@ -309,11 +352,13 @@ def _build_selected_cho_details(focus_cho):
                     "value": md.get("value", ""),
                 })
         if tags:
-            memories.append({
-                "memory_id": memory.id,
-                "memory_label": memory.title or memory.custom_id or f"Memory {memory.id}",
-                "tags": tags,
-            })
+          memory_code = memory.custom_id or str(memory.id)
+          memory_name = memory.title or f"Memory {memory.id}"
+          memories.append({
+            "memory_id": memory.id,
+            "memory_label": f"{memory_code} - {memory_name}",
+            "tags": tags,
+          })
 
     return {
         "id": cho.id,
