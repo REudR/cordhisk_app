@@ -18,6 +18,8 @@ HTML_TEMPLATE = """
       body { font-family: "Avenir Next", "Segoe UI", sans-serif; margin: 0; background: radial-gradient(circle at 10% 10%, #f9fbfc 0%, var(--bg) 52%, #e8eef2 100%); color: var(--ink); }
       .shell { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
       .sidebar { background: linear-gradient(180deg, #0f3b5a 0%, #0d5660 100%); color: white; padding: 20px; display: flex; flex-direction: column; }
+      .sidebar h2 { margin: 0 0 4px; }
+      .sidebar-subtitle { margin: 0 0 10px; font-size: 14px; }
       .content { padding: 24px; }
       .card { background: var(--surface); border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: var(--shadow); border: 1px solid rgba(219, 228, 240, 0.7); }
       a { color: #005b8f; text-decoration: none; }
@@ -56,15 +58,15 @@ HTML_TEMPLATE = """
       svg { width: 100%; min-width: 1000px; height: auto; border: 0; border-radius: 8px; background: white; cursor: grab; }
       svg.dragging { cursor: grabbing; }
       .node { stroke: #334155; stroke-width: 1.5; }
-      .memory { fill: #56b4e9; }
-      .cho { fill: #009e73; }
+      .memory { fill: #d8ebf7; }
+      .cho { fill: #e69f00; }
       .memory_metadata { fill: #d8ebf7; }
       .cho_metadata { fill: #d8f1e6; }
       .metadata-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
       .metadata-visible { opacity: 1; visibility: visible; pointer-events: auto; }
       .metadata-collapsed { opacity: 0; visibility: hidden; pointer-events: none; }
       .edge-collapsed { opacity: 0; visibility: hidden; }
-      .focused { stroke: #ef4444; stroke-width: 3; }
+      .focused { stroke: black; stroke-width: 1; }
       .label { font-size: 12px; fill: #0f172a; pointer-events: none; }
       .result-table { width: 100%; border-collapse: collapse; font-size: 14px; }
       .result-table th, .result-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #e5e7eb; }
@@ -158,7 +160,7 @@ HTML_TEMPLATE = """
     <div class="shell">
       <aside class="sidebar">
         <h2>CORDHISK v2.1</h2>
-        <p>Metadata workspace for memories & cultural heritage objects (CHO).</p>
+        <p class="sidebar-subtitle">Metadata workspace for memories & cultural heritage objects (CHO).</p>
         <button type="button" class="menu-toggle" id="toggle-menu">Menu</button>
         <div class="sidebar-menu hidden" id="sidebar-menu">
           <div class="sidebar-button-grid">
