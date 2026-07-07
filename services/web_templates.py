@@ -237,7 +237,7 @@ HTML_TEMPLATE = """
         </div>
         <p class="sidebar-footer-note">
           Developped by Rafael Ramirez Eudave at the Delft University of Technology (2026).<br>
-          This project has received funding from the European Union's Horizon Europe 2023 research and innovation programme under the Marie Sklodowska Curie grant agreement No 101149833 for the project "Community-driven Digitisation for Heritage at Risk" (CORDHISK).
+          This project has received funding from the European Union's Horizon Europe 2023 under the Marie Sklodowska Curie grant agreement No 101149833 for the project "Community-driven Digitisation for Heritage at Risk" (CORDHISK).
         </p>
       </aside>
       <main class="content">
