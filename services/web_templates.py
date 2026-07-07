@@ -237,7 +237,7 @@ HTML_TEMPLATE = """
         </div>
         <p class="sidebar-footer-note">
           Developped by Rafael Ramirez Eudave at the Delft University of Technology (2026).<br>
-          This project has received funding from the European Union's Horizon Europe 2023 under the Marie Sklodowska Curie grant agreement No 101149833 for the project "Community-driven Digitisation for Heritage at Risk" (CORDHISK).
+          The Community-driven Digitisation for Heritage at Risk (CORDHISK) project is funded by the European Union's Horizon Europe 2023 (Marie Sklodowska Curie grant agreement No 101149833).
         </p>
       </aside>
       <main class="content">
@@ -700,8 +700,11 @@ HTML_TEMPLATE = """
             const allMetadata = metadataNodes.concat(metadataLabels);
             allMetadata.forEach((item) => {
               const ownerMemoryId = item.getAttribute('data-memory-owner-id') || '';
+              const ownerMemoryIds = ownerMemoryId.split(',').map((value) => value.trim()).filter(Boolean);
               const ownerChoId = item.getAttribute('data-parent-id') || '';
-              const collapsed = isChoView ? collapsedByMemory.has(ownerMemoryId) : collapsedByCho.has(ownerChoId);
+              const collapsed = isChoView
+                ? (ownerMemoryIds.length > 0 && ownerMemoryIds.every((id) => collapsedByMemory.has(id)))
+                : collapsedByCho.has(ownerChoId);
               item.classList.toggle('metadata-collapsed', collapsed);
             });
             compactLayout();

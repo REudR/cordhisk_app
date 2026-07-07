@@ -179,7 +179,7 @@ def _memory_metadata_dict(text):
     metadata = {}
     for md in extract_metadata(text or ""):
         if md.get("type") == MetadataType.MEMORY.value:
-            field = md.get("field")
+            field = md.get("field")s
             value = md.get("value")
             if field and value is not None:
                 metadata[field] = value
@@ -191,6 +191,7 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
     cho_rows = session.query(CHO).order_by(CHO.id).all()
     nodes = []
     edges = []
+    edge_ids = set()
     seen_nodes = {}
     cho_metadata_positions = {}
     cho_base_y = {}
@@ -210,7 +211,20 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
           "memory_owner_id": memory_owner_id,
         }
         nodes.append(seen_nodes[node_id])
+      elif memory_owner_id:
+        existing = seen_nodes[node_id].get("memory_owner_id", "")
+        owner_ids = [item for item in existing.split(",") if item]
+        if memory_owner_id not in owner_ids:
+          owner_ids.append(memory_owner_id)
+          seen_nodes[node_id]["memory_owner_id"] = ",".join(owner_ids)
       return seen_nodes[node_id]
+
+    def add_edge(from_node, to_node):
+      key = (from_node["id"], to_node["id"])
+      if key in edge_ids:
+        return
+      edge_ids.add(key)
+      edges.append((from_node, to_node))
 
     def matches_cho(metadata_items, cho_id):
         for md in metadata_items:
@@ -317,7 +331,7 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
                 cho_column_positions = cho_metadata_positions.setdefault(cho_key, {})
                 metadata_row = cho_column_positions.setdefault(position_key, len(cho_column_positions))
                 metadata_node = add_node(
-                    f"cho_md:{cho.custom_id or cho.id}:{memory.id}:{metadata_label}:{md_index}",
+                    f"cho_md:{cho_key}:{metadata_row}",
                     metadata_label,
                     "cho_metadata",
                     600,
@@ -328,7 +342,8 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
                     f"{metadata_label}: {md.get('value', '')}",
                   f"memory:{memory.id}",
                 )
-                edges.extend([(memory_node, metadata_node), (metadata_node, cho_node)])
+                add_edge(memory_node, metadata_node)
+                add_edge(metadata_node, cho_node)
 
     return nodes, edges
 
