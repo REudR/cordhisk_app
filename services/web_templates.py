@@ -26,7 +26,7 @@ HTML_TEMPLATE = """
       .pill.cho { background: #d8f1e6; color: #0f6f55; border-color: #9ad7c2; }
       .pill.add { background: #0072b2; color: white; border-color: #005b8f; cursor: pointer; font-weight: 700; min-width: 28px; justify-content: center; }
       .pill.selected { box-shadow: 0 0 0 2px #0f172a inset; }
-      .text-view { font-family: inherit; line-height: 1.7; white-space: normal; }
+      .text-view { font-family: inherit; font-size: 14px; line-height: 1.7; white-space: normal; }
       .text-view p { margin: 0 0 10px; }
       form input, form select, form textarea { width: 100%; margin-bottom: 10px; padding: 8px; box-sizing: border-box; }
       form textarea { min-height: 140px; }
@@ -127,6 +127,8 @@ HTML_TEMPLATE = """
       .inline-annotation-row button { white-space: nowrap; }
       .status-msg { display: none; }
       .annotation-title { font-weight: 400; }
+      .memory-title { margin: 0 0 10px; font-size: 1em; font-weight: 700; }
+      .metadata-helper { color: #475569; font-size: 13px; margin: 0 0 8px; }
       .sidebar-footer-note {
         margin-top: auto;
         padding-top: 14px;
@@ -269,9 +271,9 @@ HTML_TEMPLATE = """
           <div>
             {% if not focus_cho %}
             <div class="card">
-              <h2>{{ selected_memory.custom_id or selected_memory.id }} — {{ selected_memory.title or ('Memory ' ~ selected_memory.id) }}</h2>
+              <h4 class="memory-title">{{ selected_memory.custom_id or selected_memory.id }} — {{ selected_memory.title or ('Memory ' ~ selected_memory.id) }}</h4>
               <form action="/memories/{{ selected_memory.id }}/annotate" method="post">
-                <h3 class="annotation-title">Annotate highlighted memory text</h3>
+                <p class="annotation-title metadata-helper">Annotate highlighted memory text</p>
                 <div class="annotation-toolbar">
                   <button type="button" class="pill add" id="open-add-cho-tag" title="Add CHO tag">+</button>
                   <span id="selection-preview">No selection yet</span>
@@ -320,7 +322,7 @@ HTML_TEMPLATE = """
             <div class="card metadata-card">
               {% if focus_cho and selected_cho_details %}
                 <h4>CHO {{ selected_cho_details.label }} — {{ selected_cho_details.title }}</h4>
-                <p>Metadata grouped by memory for the selected CHO.</p>
+                <p class="metadata-helper">Metadata grouped by memory for the selected CHO.</p>
                 {% for group in selected_cho_details.memories %}
                 <div class="cho-memory-group">
                   <p><strong><a href="/?memory_id={{ group.memory_id }}&focus_cho={{ selected_cho_details.label }}">{{ group.memory_label }}</a></strong></p>
