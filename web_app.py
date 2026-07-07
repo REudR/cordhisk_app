@@ -179,7 +179,7 @@ def _memory_metadata_dict(text):
     metadata = {}
     for md in extract_metadata(text or ""):
         if md.get("type") == MetadataType.MEMORY.value:
-            field = md.get("field")s
+            field = md.get("field")
             value = md.get("value")
             if field and value is not None:
                 metadata[field] = value
