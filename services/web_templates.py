@@ -17,7 +17,7 @@ HTML_TEMPLATE = """
       }
       body { font-family: "Avenir Next", "Segoe UI", sans-serif; margin: 0; background: radial-gradient(circle at 10% 10%, #f9fbfc 0%, var(--bg) 52%, #e8eef2 100%); color: var(--ink); }
       .shell { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
-      .sidebar { background: linear-gradient(180deg, #0f3b5a 0%, #0d5660 100%); color: white; padding: 20px; }
+      .sidebar { background: linear-gradient(180deg, #0f3b5a 0%, #0d5660 100%); color: white; padding: 20px; display: flex; flex-direction: column; }
       .content { padding: 24px; }
       .card { background: var(--surface); border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: var(--shadow); border: 1px solid rgba(219, 228, 240, 0.7); }
       a { color: #005b8f; text-decoration: none; }
@@ -58,11 +58,12 @@ HTML_TEMPLATE = """
       .node { stroke: #334155; stroke-width: 1.5; }
       .memory { fill: #56b4e9; }
       .cho { fill: #009e73; }
-      .memory_metadata { fill: #e69f00; }
-      .cho_metadata { fill: #d55e00; }
+      .memory_metadata { fill: #d8ebf7; }
+      .cho_metadata { fill: #d8f1e6; }
       .metadata-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
       .metadata-visible { opacity: 1; visibility: visible; pointer-events: auto; }
       .metadata-collapsed { opacity: 0; visibility: hidden; pointer-events: none; }
+      .edge-collapsed { opacity: 0; visibility: hidden; }
       .focused { stroke: #ef4444; stroke-width: 3; }
       .label { font-size: 12px; fill: #0f172a; pointer-events: none; }
       .result-table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -125,6 +126,15 @@ HTML_TEMPLATE = """
       .inline-annotation-row input, .inline-annotation-row select { margin-bottom: 0; }
       .inline-annotation-row button { white-space: nowrap; }
       .status-msg { display: none; }
+      .annotation-title { font-weight: 400; }
+      .sidebar-footer-note {
+        margin-top: auto;
+        padding-top: 14px;
+        font-size: 11px;
+        line-height: 1.35;
+        color: #d7e5ee;
+        border-top: 1px solid rgba(215, 229, 238, 0.35);
+      }
       @media (max-width: 980px) {
         .shell { grid-template-columns: 1fr; }
         .sidebar { border-bottom: 1px solid #334155; }
@@ -145,8 +155,8 @@ HTML_TEMPLATE = """
   <body>
     <div class="shell">
       <aside class="sidebar">
-        <h2>CORDHISK</h2>
-        <p>Web-based metadata workspace for memories and cultural heritage objects.</p>
+        <h2>CORDHISK v2.1</h2>
+        <p>Metadata workspace for memories & cultural heritage objects (CHO).</p>
         <button type="button" class="menu-toggle" id="toggle-menu">Menu</button>
         <div class="sidebar-menu hidden" id="sidebar-menu">
           <div class="sidebar-button-grid">
@@ -198,7 +208,6 @@ HTML_TEMPLATE = """
           <button type="button" id="show-chos-btn">CHO records</button>
         </div>
         <div class="card sidebar-card list-panel" id="memories-panel">
-          <h3>Memories</h3>
           <ul class="sidebar-list">
             {% for memory in memories %}
             <li>
@@ -211,7 +220,6 @@ HTML_TEMPLATE = """
           </ul>
         </div>
         <div class="card sidebar-card list-panel hidden" id="chos-panel">
-          <h3>CHO records</h3>
           <ul class="sidebar-list">
             {% for cho in chos %}
             <li>
@@ -223,6 +231,10 @@ HTML_TEMPLATE = """
             {% endfor %}
           </ul>
         </div>
+        <p class="sidebar-footer-note">
+          Developped by Rafael Ramirez Eudave at the Delft University of Technology (2026).<br>
+          This project has received funding from the European Union's Horizon Europe 2023 research and innovation programme under the Marie Sklodowska Curie grant agreement No 101149833 for the project "Community-driven Digitisation for Heritage at Risk" (CORDHISK).
+        </p>
       </aside>
       <main class="content">
         {% if notice_message %}
@@ -230,84 +242,81 @@ HTML_TEMPLATE = """
         {% endif %}
         {% if selected_memory %}
         <div class="grid">
-          <div class="card">
-            {% if not focus_cho %}
-            <h2>{{ selected_memory.custom_id or selected_memory.id }} — {{ selected_memory.title or ('Memory ' ~ selected_memory.id) }}</h2>
-            {% endif %}
-            {% if not focus_cho %}
-            <form action="/memories/{{ selected_memory.id }}/annotate" method="post">
-              <h3>Annotate highlighted memory text</h3>
-              <div class="annotation-toolbar">
-                <button type="button" class="pill add" id="open-add-cho-tag" title="Add CHO tag">+</button>
-                <span id="selection-preview">No selection yet</span>
-              </div>
-              <div id="annotation-source" class="text-view" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; user-select: text;">
-                {% for paragraph in paragraphs %}
-                <p>
-                  {% for part in paragraph %}
-                    {% if part.type == 'text' %}
-                      {{ part.value }}
-                    {% else %}
-                      <span class="highlight {{ part.kind }}" title="{{ part.field }}">{{ part.value }}</span>
-                    {% endif %}
+          <div class="card graph-card">
+            <h3>Memory relationship graph</h3>
+            <div class="graph-toolbar">
+              <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+              <button type="button" id="zoom-out" aria-label="Zoom out">-</button>
+              <button type="button" id="reset-view">Reset</button>
+              <div id="graph-hover-value" class="graph-hover-value">Hover CHO or metadata nodes to inspect values.</div>
+            </div>
+            <div class="graph-shell">
+              <svg id="graph-svg" viewBox="0 0 1000 700" role="img" aria-label="Memory and CHO graph">
+                <g id="graph-content">
+                  {% for edge in edges %}
+                  <line x1="{{ edge[0].x }}" y1="{{ edge[0].y }}" x2="{{ edge[1].x }}" y2="{{ edge[1].y }}" data-from-id="{{ edge[0].id }}" data-to-id="{{ edge[1].id }}" stroke="#94a3b8" stroke-width="2"></line>
                   {% endfor %}
-                </p>
-                {% endfor %}
-              </div>
-              <input id="selected-annotation-text" name="selected_annotation_text" type="hidden">
-              <div id="add-cho-tag-box" class="annotation-inline-edit">
-              <div class="inline-annotation-row">
-                <div>
-                  <label>CHO</label>
-                  <select name="annotation_cho">
-                    {% for cho in chos %}
-                    <option value="{{ cho.custom_id or cho.id }}">{{ cho.title or cho.custom_id or cho.id }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div>
-                  <label>Field</label>
-                  <select name="annotation_field">
-                    {% for field in cho_fields %}
-                    <option value="{{ field.field }}">{{ field.label }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div>
-                  <button type="submit">Add annotation</button>
-                </div>
-              </div>
-              </div>
-              <input type="hidden" name="focus_cho" value="{{ focus_cho or '' }}">
-            </form>
-            {% endif %}
-            <div class="card graph-card" style="margin-top: 14px;">
-              <h3>Memory relationship graph</h3>
-              <p>Click a memory node to reveal its metadata and hover a CHO node to inspect its metadata.</p>
-              <div class="graph-toolbar">
-                <button type="button" id="zoom-in">Zoom in</button>
-                <button type="button" id="zoom-out">Zoom out</button>
-                <button type="button" id="reset-view">Reset view</button>
-                <div id="graph-hover-value" class="graph-hover-value">Hover CHO or metadata nodes to inspect values.</div>
-              </div>
-              <div class="graph-shell">
-                <svg id="graph-svg" viewBox="0 0 1000 700" role="img" aria-label="Memory and CHO graph">
-                  <g id="graph-content">
-                    {% for edge in edges %}
-                    <line x1="{{ edge[0].x }}" y1="{{ edge[0].y }}" x2="{{ edge[1].x }}" y2="{{ edge[1].y }}" stroke="#94a3b8" stroke-width="2"></line>
-                    {% endfor %}
-                    {% for node in nodes %}
-                    <a href="{{ node.link }}">
-                      <circle class="graph-node node {{ node.group }} {% if node.id == ('cho:' ~ focus_cho) or node.id == focus_memory %}focused{% endif %} {% if node.group in ['memory_metadata','cho_metadata'] %}metadata-visible{% endif %}" data-node-id="{{ node.id }}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-memory-owner-id="{{ node.memory_owner_id or '' }}" data-details="{{ node.details or '' }}" title="{{ node.details or '' }}" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius or 32 }}"></circle>
-                      <text class="label {% if node.group in ['memory_metadata','cho_metadata'] %}graph-metadata-label metadata-visible{% endif %}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-memory-owner-id="{{ node.memory_owner_id or '' }}" x="{{ node.x }}" y="{{ node.y + 6 }}" text-anchor="middle">{{ node.label }}</text>
-                    </a>
-                    {% endfor %}
-                  </g>
-                </svg>
-              </div>
+                  {% for node in nodes %}
+                  <a href="{{ node.link }}">
+                    <circle class="graph-node node {{ node.group }} {% if node.id == ('cho:' ~ focus_cho) or node.id == focus_memory %}focused{% endif %} {% if node.group in ['memory_metadata','cho_metadata'] %}metadata-visible{% endif %}" data-node-id="{{ node.id }}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-memory-owner-id="{{ node.memory_owner_id or '' }}" data-details="{{ node.details or '' }}" title="{{ node.details or '' }}" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius or 32 }}"></circle>
+                    <text class="label {% if node.group in ['memory_metadata','cho_metadata'] %}graph-metadata-label metadata-visible{% endif %}" data-node-id="{{ node.id }}" data-node-type="{{ node.group }}" data-parent-id="{{ node.parent_id or '' }}" data-memory-owner-id="{{ node.memory_owner_id or '' }}" x="{{ node.x }}" y="{{ node.y + 6 }}" text-anchor="middle">{{ node.label }}</text>
+                  </a>
+                  {% endfor %}
+                </g>
+              </svg>
             </div>
           </div>
           <div>
+            {% if not focus_cho %}
+            <div class="card">
+              <h2>{{ selected_memory.custom_id or selected_memory.id }} — {{ selected_memory.title or ('Memory ' ~ selected_memory.id) }}</h2>
+              <form action="/memories/{{ selected_memory.id }}/annotate" method="post">
+                <h3 class="annotation-title">Annotate highlighted memory text</h3>
+                <div class="annotation-toolbar">
+                  <button type="button" class="pill add" id="open-add-cho-tag" title="Add CHO tag">+</button>
+                  <span id="selection-preview">No selection yet</span>
+                </div>
+                <div id="annotation-source" class="text-view" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; user-select: text;">
+                  {% for paragraph in paragraphs %}
+                  <p>
+                    {% for part in paragraph %}
+                      {% if part.type == 'text' %}
+                        {{ part.value }}
+                      {% else %}
+                        <span class="highlight {{ part.kind }}" title="{{ part.field }}">{{ part.value }}</span>
+                      {% endif %}
+                    {% endfor %}
+                  </p>
+                  {% endfor %}
+                </div>
+                <input id="selected-annotation-text" name="selected_annotation_text" type="hidden">
+                <div id="add-cho-tag-box" class="annotation-inline-edit">
+                <div class="inline-annotation-row">
+                  <div>
+                    <label>CHO</label>
+                    <select name="annotation_cho">
+                      {% for cho in chos %}
+                      <option value="{{ cho.custom_id or cho.id }}">{{ cho.title or cho.custom_id or cho.id }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div>
+                    <label>Field</label>
+                    <select name="annotation_field">
+                      {% for field in cho_fields %}
+                      <option value="{{ field.field }}">{{ field.label }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div>
+                    <button type="submit">Add annotation</button>
+                  </div>
+                </div>
+                </div>
+                <input type="hidden" name="focus_cho" value="{{ focus_cho or '' }}">
+              </form>
+            </div>
+            {% endif %}
             <div class="card metadata-card">
               {% if focus_cho and selected_cho_details %}
                 <h4>CHO {{ selected_cho_details.label }} — {{ selected_cho_details.title }}</h4>
@@ -459,12 +468,6 @@ HTML_TEMPLATE = """
 
         if (menuToggleButton && sidebarMenu) {
           const syncMenu = function () {
-            const mobile = window.matchMedia('(max-width: 980px)').matches;
-            if (!mobile) {
-              sidebarMenu.classList.remove('hidden');
-              menuToggleButton.classList.remove('active');
-              return;
-            }
             if (!menuToggleButton.classList.contains('active')) {
               sidebarMenu.classList.add('hidden');
             }
@@ -625,12 +628,69 @@ HTML_TEMPLATE = """
 
           const metadataNodes = Array.from(document.querySelectorAll('.graph-node[data-node-type="memory_metadata"], .graph-node[data-node-type="cho_metadata"]'));
           const metadataLabels = Array.from(document.querySelectorAll('.graph-metadata-label[data-node-type="memory_metadata"], .graph-metadata-label[data-node-type="cho_metadata"]'));
+          const allNodeCircles = Array.from(document.querySelectorAll('.graph-node[data-node-id]'));
+          const allNodeLabels = Array.from(document.querySelectorAll('.label[data-node-id]'));
+          const edgeLines = Array.from(document.querySelectorAll('line[data-from-id][data-to-id]'));
+          const nodeCircleById = new Map(allNodeCircles.map((node) => [node.getAttribute('data-node-id') || '', node]));
+          const nodeLabelById = new Map(allNodeLabels.map((node) => [node.getAttribute('data-node-id') || '', node]));
+          const originalYById = new Map(allNodeCircles.map((node) => [node.getAttribute('data-node-id') || '', parseFloat(node.getAttribute('cy') || '0')]));
           const collapsedByMemory = new Set();
           const collapsedByCho = new Set();
           const setHoverValue = (text) => {
             if (hoverValueBox) {
               hoverValueBox.textContent = text || 'No metadata details available.';
             }
+          };
+          const setNodeY = (nodeId, y) => {
+            const circle = nodeCircleById.get(nodeId);
+            if (circle) {
+              circle.setAttribute('cy', String(y));
+            }
+            const label = nodeLabelById.get(nodeId);
+            if (label) {
+              label.setAttribute('y', String(y + 6));
+            }
+          };
+          const updateEdges = () => {
+            edgeLines.forEach((line) => {
+              const fromId = line.getAttribute('data-from-id') || '';
+              const toId = line.getAttribute('data-to-id') || '';
+              const fromNode = nodeCircleById.get(fromId);
+              const toNode = nodeCircleById.get(toId);
+              if (!fromNode || !toNode) {
+                return;
+              }
+              line.setAttribute('x1', fromNode.getAttribute('cx') || '0');
+              line.setAttribute('y1', fromNode.getAttribute('cy') || '0');
+              line.setAttribute('x2', toNode.getAttribute('cx') || '0');
+              line.setAttribute('y2', toNode.getAttribute('cy') || '0');
+              const collapsed = fromNode.classList.contains('metadata-collapsed') || toNode.classList.contains('metadata-collapsed');
+              line.classList.toggle('edge-collapsed', collapsed);
+            });
+          };
+          const compactLayout = () => {
+            const choNodes = allNodeCircles
+              .filter((node) => node.getAttribute('data-node-type') === 'cho')
+              .sort((a, b) => (originalYById.get(a.getAttribute('data-node-id') || '') || 0) - (originalYById.get(b.getAttribute('data-node-id') || '') || 0));
+            let cursorY = 140;
+            const rowGap = 64;
+            choNodes.forEach((choNode) => {
+              const choId = choNode.getAttribute('data-node-id') || '';
+              const choMetadata = metadataNodes
+                .filter((node) => (node.getAttribute('data-parent-id') || '') === choId)
+                .sort((a, b) => (originalYById.get(a.getAttribute('data-node-id') || '') || 0) - (originalYById.get(b.getAttribute('data-node-id') || '') || 0));
+              const visibleMetadata = choMetadata.filter((node) => !node.classList.contains('metadata-collapsed'));
+              const visibleCount = visibleMetadata.length;
+              const choY = visibleCount > 0 ? cursorY + ((visibleCount - 1) * rowGap) / 2 : cursorY + 35;
+              setNodeY(choId, choY);
+              visibleMetadata.forEach((node, index) => {
+                const nodeId = node.getAttribute('data-node-id') || '';
+                setNodeY(nodeId, cursorY + index * rowGap);
+              });
+              const bandHeight = visibleCount > 0 ? Math.max(170, visibleCount * rowGap + 55) : 110;
+              cursorY += bandHeight;
+            });
+            updateEdges();
           };
           const applyCollapsedState = () => {
             const allMetadata = metadataNodes.concat(metadataLabels);
@@ -640,6 +700,7 @@ HTML_TEMPLATE = """
               const collapsed = isChoView ? collapsedByMemory.has(ownerMemoryId) : collapsedByCho.has(ownerChoId);
               item.classList.toggle('metadata-collapsed', collapsed);
             });
+            compactLayout();
           };
 
           const initiallyVisibleMetadataNode = metadataNodes.find((node) => node.classList.contains('metadata-visible'));
