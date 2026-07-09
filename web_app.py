@@ -84,6 +84,78 @@ def _persist_memory_to_disk(memory, text=None):
     return memory.file_path
 
 
+def _find_nth_occurrence(text, term, occurrence_index):
+  if not text or not term:
+    return -1
+  target_index = max(0, int(occurrence_index or 0))
+  search_from = 0
+  found_count = 0
+  step = max(len(term), 1)
+  while True:
+    pos = text.find(term, search_from)
+    if pos == -1:
+      return -1
+    if found_count == target_index:
+      return pos
+    found_count += 1
+    search_from = pos + step
+
+
+def _visible_span_to_raw_span(raw_text, visible_start, visible_end):
+  if raw_text is None:
+    return None
+  if visible_start < 0 or visible_end < visible_start:
+    return None
+
+  hidden_blocks = []
+  block_pattern = r'===\s*MEMORY METADATA START\s*===.*?===\s*MEMORY METADATA END\s*==='
+  for match in re.finditer(block_pattern, raw_text, re.DOTALL):
+    hidden_blocks.append((match.start(), match.end()))
+
+  raw_start = None
+  raw_end = None
+  visible_pos = 0
+  i = 0
+  text_len = len(raw_text)
+  hidden_idx = 0
+
+  while i < text_len:
+    if hidden_idx < len(hidden_blocks):
+      hidden_start, hidden_end = hidden_blocks[hidden_idx]
+      if i >= hidden_end:
+        hidden_idx += 1
+        continue
+      if i >= hidden_start:
+        i = hidden_end
+        hidden_idx += 1
+        continue
+
+    ch = raw_text[i]
+    if ch == "<":
+      tag_end = raw_text.find(">", i + 1)
+      if tag_end != -1:
+        i = tag_end + 1
+        continue
+
+    if raw_start is None and visible_pos == visible_start:
+      raw_start = i
+    if raw_end is None and visible_pos == visible_end:
+      raw_end = i
+      break
+
+    visible_pos += 1
+    i += 1
+
+  if raw_start is None and visible_pos == visible_start:
+    raw_start = text_len
+  if raw_end is None and visible_pos == visible_end:
+    raw_end = text_len
+
+  if raw_start is None or raw_end is None:
+    return None
+  return raw_start, raw_end
+
+
 def _build_paragraphs(text):
     clean_text, spans = parse_text_and_spans(text or "")
     if not clean_text:
@@ -870,15 +942,39 @@ def create_app(testing=False):
     focus_cho = request.form.get("focus_cho", "").strip()
 
     annotation_text = request.form.get("selected_annotation_text", "").strip() or request.form.get("annotation_text", "").strip()
+    selected_occurrence = request.form.get("selected_annotation_occurrence", type=int)
+    if selected_occurrence is None:
+      selected_occurrence = 0
     annotation_field = request.form.get("annotation_field", "").strip()
     annotation_cho = request.form.get("annotation_cho", "").strip()
     if annotation_text and annotation_field and annotation_cho:
-      annotation = f'<{annotation_field} cho="{annotation_cho}">{annotation_text}</{annotation_field}>'
+      annotation_open = f'<{annotation_field} cho="{annotation_cho}">'
+      annotation_close = f'</{annotation_field}>'
       current_text = memory.text or ""
-      if annotation_text in current_text:
-        memory.text = current_text.replace(annotation_text, annotation, 1)
+      clean_text, _ = parse_text_and_spans(current_text)
+      visible_start = _find_nth_occurrence(clean_text, annotation_text, selected_occurrence)
+      if visible_start == -1:
+        visible_start = clean_text.find(annotation_text)
+
+      if visible_start != -1:
+        visible_end = visible_start + len(annotation_text)
+        raw_span = _visible_span_to_raw_span(current_text, visible_start, visible_end)
+        if raw_span is not None:
+          raw_start, raw_end = raw_span
+          wrapped_segment = current_text[raw_start:raw_end]
+          memory.text = (
+            current_text[:raw_start]
+            + annotation_open
+            + wrapped_segment
+            + annotation_close
+            + current_text[raw_end:]
+          )
+        else:
+          memory.text = current_text.replace(annotation_text, f"{annotation_open}{annotation_text}{annotation_close}", 1)
+      elif annotation_text in current_text:
+        memory.text = current_text.replace(annotation_text, f"{annotation_open}{annotation_text}{annotation_close}", 1)
       else:
-        memory.text = current_text + ("\n" if current_text else "") + annotation
+        memory.text = current_text + ("\n" if current_text else "") + annotation_open + annotation_text + annotation_close
       _persist_memory_to_disk(memory)
       session.add(memory)
       session.commit()

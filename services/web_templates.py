@@ -96,6 +96,7 @@ HTML_TEMPLATE = """
       .metadata-inline-edit { display: none; margin-top: 10px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px; background: #f0f7ff; }
       .metadata-inline-edit-actions { margin-top: 8px; }
       .annotation-inline-edit { display: none; margin-top: 10px; padding: 10px; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; }
+      #add-cho-tag-box.annotation-inline-edit { display: block; }
       .memory-mode-hide { display: none; }
       .sidebar-list { list-style: none; margin: 0; padding: 0; }
       .sidebar-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
@@ -118,6 +119,9 @@ HTML_TEMPLATE = """
       .selection-value { font-style: italic; font-weight: 700; }
       .cho-tags-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
       .cho-tags-head h4 { margin: 0; }
+      .cho-tags-head .toggle-cho-tags { background: #475569; padding: 6px 10px; font-size: 12px; }
+      .cho-tags-head .toggle-cho-tags[aria-expanded="false"] { background: #64748b; }
+      .cho-tags-list.is-collapsed { display: none; }
       .list-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
       .list-selector button { background: #334155; font-size: 12px; padding: 6px 8px; }
       .list-selector button.active { background: #0072b2; }
@@ -131,6 +135,10 @@ HTML_TEMPLATE = """
       .annotation-title { font-weight: 400; }
       .memory-title { margin: 0 0 10px; font-size: 1em; font-weight: 700; }
       .metadata-helper { color: #475569; font-size: 13px; margin: 0 0 8px; }
+      .right-panel { display: flex; flex-direction: column; }
+      .right-panel .metadata-card { order: 1; }
+      .right-panel .memory-text-card { order: 2; }
+      .memory-text-scroll { max-height: 420px; overflow-y: auto; }
       .sidebar-footer-note {
         margin-top: auto;
         padding-top: 14px;
@@ -270,30 +278,15 @@ HTML_TEMPLATE = """
               </svg>
             </div>
           </div>
-          <div>
+          <div class="right-panel">
             {% if not focus_cho %}
-            <div class="card">
+            <div class="card memory-text-card">
               <h4 class="memory-title">{{ selected_memory.custom_id or selected_memory.id }} — {{ selected_memory.title or ('Memory ' ~ selected_memory.id) }}</h4>
-              <form action="/memories/{{ selected_memory.id }}/annotate" method="post">
+              <form action="/memories/{{ selected_memory.id }}/annotate" method="post" id="memory-annotation-form">
                 <p class="annotation-title metadata-helper">Annotate highlighted memory text</p>
                 <div class="annotation-toolbar">
-                  <button type="button" class="pill add" id="open-add-cho-tag" title="Add CHO tag">+</button>
                   <span id="selection-preview">No selection yet</span>
                 </div>
-                <div id="annotation-source" class="text-view" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; user-select: text;">
-                  {% for paragraph in paragraphs %}
-                  <p>
-                    {% for part in paragraph %}
-                      {% if part.type == 'text' %}
-                        {{ part.value }}
-                      {% else %}
-                        <span class="highlight {{ part.kind }}" title="{{ part.field }}">{{ part.value }}</span>
-                      {% endif %}
-                    {% endfor %}
-                  </p>
-                  {% endfor %}
-                </div>
-                <input id="selected-annotation-text" name="selected_annotation_text" type="hidden">
                 <div id="add-cho-tag-box" class="annotation-inline-edit">
                 <div class="inline-annotation-row">
                   <div>
@@ -317,6 +310,21 @@ HTML_TEMPLATE = """
                   </div>
                 </div>
                 </div>
+                <div id="annotation-source" class="text-view memory-text-scroll" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; user-select: text;">
+                  {% for paragraph in paragraphs %}
+                  <p>
+                    {% for part in paragraph %}
+                      {% if part.type == 'text' %}
+                        {{ part.value }}
+                      {% else %}
+                        <span class="highlight {{ part.kind }}" title="{{ part.field }}">{{ part.value }}</span>
+                      {% endif %}
+                    {% endfor %}
+                  </p>
+                  {% endfor %}
+                </div>
+                <input id="selected-annotation-text" name="selected_annotation_text" type="hidden">
+                <input id="selected-annotation-occurrence" name="selected_annotation_occurrence" type="hidden" value="0">
                 <input type="hidden" name="focus_cho" value="{{ focus_cho or '' }}">
               </form>
             </div>
@@ -379,8 +387,9 @@ HTML_TEMPLATE = """
                       <div class="cho-tags-head">
                         <button type="submit" name="remove_selected" value="1" onclick="return confirm('Remove selected metadata tags?');">Remove selected tags</button>
                         <h4>CHO tags in this memory</h4>
+                        <button type="button" class="toggle-cho-tags" id="toggle-cho-tags" aria-expanded="false" aria-controls="cho-tags-list">Expand</button>
                       </div>
-                    <div class="tag-list">
+                    <div class="tag-list cho-tags-list is-collapsed" id="cho-tags-list">
                       {% for md in cho_metadata_items %}
                       <label class="tag-selector">
                         <input type="checkbox" name="delete_cho_metadata[{{ md.cho }}][{{ md.field }}]" value="1">
@@ -408,8 +417,9 @@ HTML_TEMPLATE = """
         const isChoView = {{ 'true' if focus_cho else 'false' }};
         const source = document.getElementById('annotation-source');
         const target = document.getElementById('selected-annotation-text');
+        const targetOccurrence = document.getElementById('selected-annotation-occurrence');
         const preview = document.getElementById('selection-preview');
-        const addChoTagButton = document.getElementById('open-add-cho-tag');
+        const memoryAnnotationForm = document.getElementById('memory-annotation-form');
         const addChoTagBox = document.getElementById('add-cho-tag-box');
         const menuToggleButton = document.getElementById('toggle-menu');
         const sidebarMenu = document.getElementById('sidebar-menu');
@@ -432,6 +442,9 @@ HTML_TEMPLATE = """
         const showChosBtn = document.getElementById('show-chos-btn');
         const memoriesPanel = document.getElementById('memories-panel');
         const chosPanel = document.getElementById('chos-panel');
+        const toggleChoTagsButton = document.getElementById('toggle-cho-tags');
+        const choTagsList = document.getElementById('cho-tags-list');
+        const scrollStateKey = 'cordhisk:scroll:{{ selected_memory.id if selected_memory else "none" }}';
         let zoomLevel = 1;
         let panX = 0;
         let panY = 0;
@@ -440,34 +453,107 @@ HTML_TEMPLATE = """
         let startY = 0;
 
         function captureSelection() {
-          const selection = window.getSelection().toString().trim();
-          if (!selection) {
+          const selection = window.getSelection();
+          const selectedText = selection ? selection.toString() : '';
+          const trimmedSelection = selectedText.trim();
+          if (!trimmedSelection) {
             preview.textContent = 'No selection yet';
             if (target) {
               target.value = '';
             }
+            if (targetOccurrence) {
+              targetOccurrence.value = '0';
+            }
             return;
           }
+          let occurrence = 0;
+          if (selection && selection.rangeCount > 0 && source) {
+            const range = selection.getRangeAt(0);
+            if (source.contains(range.startContainer) && source.contains(range.endContainer)) {
+              const leadingTrimmedChars = selectedText.length - selectedText.trimStart().length;
+              const preRange = range.cloneRange();
+              preRange.selectNodeContents(source);
+              preRange.setEnd(range.startContainer, range.startOffset);
+              const startOffset = preRange.toString().length + leadingTrimmedChars;
+              const sourceText = source.textContent || '';
+              let searchFrom = 0;
+              while (true) {
+                const hit = sourceText.indexOf(trimmedSelection, searchFrom);
+                if (hit === -1 || hit >= startOffset) {
+                  break;
+                }
+                occurrence += 1;
+                searchFrom = hit + Math.max(trimmedSelection.length, 1);
+              }
+            }
+          }
           if (target) {
-            target.value = selection;
+            target.value = trimmedSelection;
+          }
+          if (targetOccurrence) {
+            targetOccurrence.value = String(occurrence);
           }
           preview.innerHTML = 'Selection: <span class="selection-value"></span>';
           const valueSpan = preview.querySelector('.selection-value');
           if (valueSpan) {
-            valueSpan.textContent = selection;
+            valueSpan.textContent = trimmedSelection;
           }
         }
 
-        if (source && target && preview) {
-          source.addEventListener('mouseup', function () { setTimeout(captureSelection, 0); });
+        function saveTextScrollState() {
+          if (!source) {
+            return;
+          }
+          try {
+            const payload = {
+              sourceScrollTop: source.scrollTop,
+              pageScrollY: window.scrollY || window.pageYOffset || 0,
+            };
+            window.sessionStorage.setItem(scrollStateKey, JSON.stringify(payload));
+          } catch (error) {
+            return;
+          }
         }
 
-        if (addChoTagButton && addChoTagBox) {
-          addChoTagButton.addEventListener('click', function () {
-            captureSelection();
-            const isVisible = addChoTagBox.style.display === 'block';
-            addChoTagBox.style.display = isVisible ? 'none' : 'block';
-          });
+        function restoreTextScrollState() {
+          if (!source) {
+            return;
+          }
+          try {
+            const rawState = window.sessionStorage.getItem(scrollStateKey);
+            if (!rawState) {
+              return;
+            }
+            const state = JSON.parse(rawState);
+            if (typeof state.sourceScrollTop === 'number') {
+              source.scrollTop = state.sourceScrollTop;
+            }
+            if (typeof state.pageScrollY === 'number') {
+              window.scrollTo(0, state.pageScrollY);
+            }
+          } catch (error) {
+            return;
+          }
+        }
+
+        requestAnimationFrame(function () {
+          restoreTextScrollState();
+          requestAnimationFrame(restoreTextScrollState);
+        });
+
+        if (source && target && preview) {
+          source.addEventListener('mouseup', function () { setTimeout(captureSelection, 0); });
+          source.addEventListener('scroll', saveTextScrollState, { passive: true });
+        }
+
+        window.addEventListener('beforeunload', saveTextScrollState);
+
+        if (memoryAnnotationForm) {
+          memoryAnnotationForm.addEventListener('submit', saveTextScrollState);
+        }
+
+        if (addChoTagBox) {
+          addChoTagBox.style.display = 'block';
         }
 
         if (menuToggleButton && sidebarMenu) {
@@ -558,8 +644,22 @@ HTML_TEMPLATE = """
           {% endif %}
         }
 
+        if (toggleChoTagsButton && choTagsList) {
+          const setChoTagsCollapsed = function (collapsed) {
+            choTagsList.classList.toggle('is-collapsed', collapsed);
+            toggleChoTagsButton.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            toggleChoTagsButton.textContent = collapsed ? 'Expand' : 'Collapse';
+          };
+          toggleChoTagsButton.addEventListener('click', function () {
+            const isCollapsed = choTagsList.classList.contains('is-collapsed');
+            setChoTagsCollapsed(!isCollapsed);
+          });
+          setChoTagsCollapsed(true);
+        }
+
         if (memoryMetadataForm) {
           memoryMetadataForm.addEventListener('submit', function (event) {
+            saveTextScrollState();
             const deleteInputs = Array.from(memoryMetadataForm.querySelectorAll('input[type="checkbox"][name^="delete_"]'));
             const hasDeletion = deleteInputs.some((input) => input.checked);
             const submitter = event.submitter;

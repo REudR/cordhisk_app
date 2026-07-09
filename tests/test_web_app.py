@@ -184,6 +184,74 @@ class WebAppTests(unittest.TestCase):
             session.delete(memory)
             session.commit()
 
+    def test_annotation_uses_selected_occurrence_for_repeated_text(self):
+        memory = Memory(
+            custom_id='test-annotation-repeated',
+            title='Annotated repeated token',
+            text='house alpha house beta house gamma',
+            file_path='demo.txt'
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.post(
+                f'/memories/{memory.id}/annotate',
+                data={
+                    'selected_annotation_text': 'house',
+                    'selected_annotation_occurrence': '2',
+                    'annotation_field': 'dc:title',
+                    'annotation_cho': 'PR75',
+                },
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            updated = session.get(Memory, memory.id)
+            self.assertEqual(
+                updated.text,
+                'house alpha house beta <dc:title cho="PR75">house</dc:title> gamma'
+            )
+        finally:
+            session.delete(memory)
+            session.commit()
+
+    def test_annotation_position_ignores_hidden_memory_metadata_block(self):
+        memory = Memory(
+            custom_id='test-annotation-hidden-memory-block',
+            title='Annotated with hidden memory metadata block',
+            text=(
+                '=== MEMORY METADATA START ===\n'
+                '<dc:title type="memory">My Memory Title</dc:title>\n'
+                '=== MEMORY METADATA END ===\n\n'
+                'Before house after'
+            ),
+            file_path='demo.txt'
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.post(
+                f'/memories/{memory.id}/annotate',
+                data={
+                    'selected_annotation_text': 'house',
+                    'selected_annotation_occurrence': '0',
+                    'annotation_field': 'dc:title',
+                    'annotation_cho': 'PR75',
+                },
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            updated = session.get(Memory, memory.id)
+            self.assertIn('Before <dc:title cho="PR75">house</dc:title> after', updated.text)
+            self.assertIn('=== MEMORY METADATA START ===', updated.text)
+            self.assertIn('=== MEMORY METADATA END ===', updated.text)
+        finally:
+            session.delete(memory)
+            session.commit()
+
     def test_search_returns_matching_memory(self):
         memory = Memory(
             custom_id='test-search-memory',
