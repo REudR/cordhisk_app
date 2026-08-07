@@ -40,11 +40,19 @@ def remove_memory_block(text):
 # BUILD MEMORY BLOCK 
 # =========================
 def build_memory_block(metadata):
-    lines = [
-        f'<{k} type="memory">{v}</{k}>'
-        for k, v in metadata.items()
-        if v.strip()
-    ]
+    ordered_items = []
+    for preferred_key in ("dc:identifier", "dc:license"):
+        value = metadata.get(preferred_key)
+        if value and value.strip():
+            ordered_items.append((preferred_key, value))
+
+    for key, value in metadata.items():
+        if key in {"dc:identifier", "dc:license"}:
+            continue
+        if value and value.strip():
+            ordered_items.append((key, value))
+
+    lines = [f'<{key} type="memory">{value}</{key}>' for key, value in ordered_items]
 
     return (
         "=== MEMORY METADATA START ===\n"
@@ -99,7 +107,11 @@ def build_spans(clean_text, memory_md, cho_md):
 # =========================
 # FULL REBUILD PIPELINE 
 # =========================
-def rebuild_memory_text(original_text, new_metadata):
+def rebuild_memory_text(original_text, new_metadata, memory_id=None):
+
+    metadata = dict(new_metadata or {})
+    if memory_id is not None:
+        metadata["dc:identifier"] = str(memory_id)
 
     txt = clean_text(original_text)
 
@@ -116,10 +128,10 @@ def rebuild_memory_text(original_text, new_metadata):
     ]
 
     # rebuild spans
-    spans = build_spans(clean, new_metadata, cho_md)
+    spans = build_spans(clean, metadata, cho_md)
 
     # rebuild block
-    block = build_memory_block(new_metadata)
+    block = build_memory_block(metadata)
 
     # rebuild text
     content = rebuild_text_from_spans(clean, spans).lstrip("\n")

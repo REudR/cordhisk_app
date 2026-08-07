@@ -24,6 +24,16 @@ CHO_FIELDS = [
 
 SEARCH_PAGE_SIZE = 10
 IMPORT_FIELDS = ("dc:title", "dc:creator", "dc:date", "dc:subject", "dc:description")
+MEMORY_LICENSE_FIELD = "dc:license"
+MEMORY_LICENSE_OPTIONS = (
+  "CC BY",
+  "CC BY-SA",
+  "CC BY-ND",
+  "CC BY-NC",
+  "CC BY-NC-SA",
+  "CC BY-NC-ND",
+  "Restricted",
+)
 
 MEMORY_FIELDS = [
     {"field": field, "label": field.split(":")[-1].replace("_", " ").title()}
@@ -39,6 +49,16 @@ def _metadata_label(field_name):
     if label:
       return label
   return field_name.split(":")[-1].replace("_", " ").replace("-", " ").title()
+
+
+def _metadata_description(field_name):
+  if not field_name:
+    return ""
+  for group in METADATA_FIELDS.values():
+    description = group.get("fields", {}).get(field_name, {}).get("description")
+    if description:
+      return description
+  return _metadata_label(field_name)
 
 
 def _normalize_text(text):
@@ -212,6 +232,23 @@ def _build_paragraphs(text):
     return paragraphs
 
 
+def _remove_nth_cho_tag(text, target_index):
+  if not text:
+    return text
+  try:
+    target_index = max(0, int(target_index))
+  except (TypeError, ValueError):
+    return text
+
+  pattern = re.compile(r'<(?P<field>[a-zA-Z0-9:_-]+)\s+cho="(?P<cho>[^"]+)">(?P<value>.*?)</(?P=field)>', re.DOTALL)
+  current_index = 0
+  for match in pattern.finditer(text):
+    if current_index == target_index:
+      return text[:match.start()] + match.group("value") + text[match.end():]
+    current_index += 1
+  return text
+
+
 def _load_context(memory_id=None, focus_cho=None):
     memories = session.query(Memory).order_by(Memory.id).all()
     chos = session.query(CHO).order_by(CHO.id).all()
@@ -235,12 +272,14 @@ def _load_context(memory_id=None, focus_cho=None):
         memory_metadata_items = [
             {"field": md["field"], "value": md["value"]}
             for md in metadata
-            if md.get("type") == MetadataType.MEMORY.value
+          if md.get("type") == MetadataType.MEMORY.value and md.get("field") not in {"dc:identifier", MEMORY_LICENSE_FIELD}
         ]
         cho_metadata_items = [
-            {"cho": md.get("cho"), "field": md["field"], "value": md["value"]}
-            for md in metadata
+          {"index": index, "cho": md.get("cho"), "field": md["field"], "value": md["value"]}
+          for index, md in enumerate(
+            md for md in metadata
             if md.get("type") == MetadataType.CHO.value and md.get("cho")
+          )
         ]
         paragraphs = _build_paragraphs(selected_memory.text or "")
 
@@ -256,6 +295,11 @@ def _memory_metadata_dict(text):
             if field and value is not None:
                 metadata[field] = value
     return metadata
+
+
+def _memory_license_value(memory):
+  value = getattr(memory, "license", None)
+  return value.strip() if isinstance(value, str) else (value or "")
 
 
 def _build_graph_data(selected_memory_id=None, focus_cho=None):
@@ -755,6 +799,7 @@ def create_app(testing=False):
     temp_path = ""
     suggested_id = request.args.get("id", "").strip()
     form_metadata = {field: "" for field in IMPORT_FIELDS}
+    form_metadata[MEMORY_LICENSE_FIELD] = ""
     detected_count = 0
 
     if request.method == "POST":
@@ -782,7 +827,9 @@ def create_app(testing=False):
         existing_memory_md = _extract_memory_block_metadata(txt)
         for field in IMPORT_FIELDS:
           form_metadata[field] = existing_memory_md.get(field, "")
+        form_metadata[MEMORY_LICENSE_FIELD] = existing_memory_md.get(MEMORY_LICENSE_FIELD, "")
 
+        suggested_id = request.form.get("id", "").strip() or existing_memory_md.get("dc:identifier", "") or str(uuid.uuid4())[:8]
         import_ready = True
         detected_count = len(existing_memory_md)
         notice_level = "success"
@@ -793,22 +840,26 @@ def create_app(testing=False):
         if not temp_path or not os.path.exists(temp_path):
           return _redirect_with_notice("import_memory", "error", "Import session expired. Please upload the file again.")
 
-        suggested_id = request.form.get("id", "").strip() or str(uuid.uuid4())[:8]
+        suggested_id = request.form.get("id", "").strip()
+        if not suggested_id:
+          with open(temp_path, encoding="utf-8", errors="replace") as handle:
+            txt = handle.read()
+          existing_memory_md = _extract_memory_block_metadata(txt)
+          suggested_id = existing_memory_md.get("dc:identifier", "").strip() or str(uuid.uuid4())[:8]
+        else:
+          with open(temp_path, encoding="utf-8", errors="replace") as handle:
+            txt = handle.read()
         if session.query(Memory).filter(Memory.custom_id == suggested_id).first() is not None:
           notice_level = "error"
           notice_message = f"Memory ID '{suggested_id}' already exists. Choose another ID."
           import_ready = True
-          with open(temp_path, encoding="utf-8", errors="replace") as handle:
-            txt = handle.read()
           existing_memory_md = _extract_memory_block_metadata(txt)
           detected_count = len(existing_memory_md)
           for field in IMPORT_FIELDS:
             form_metadata[field] = request.form.get(field, "").strip() or existing_memory_md.get(field, "")
+          form_metadata[MEMORY_LICENSE_FIELD] = request.form.get(MEMORY_LICENSE_FIELD, "").strip() or existing_memory_md.get(MEMORY_LICENSE_FIELD, "")
         else:
           try:
-            with open(temp_path, encoding="utf-8", errors="replace") as handle:
-              txt = handle.read()
-
             existing_memory_md = _extract_memory_block_metadata(txt)
             metadata = dict(existing_memory_md)
             for field in IMPORT_FIELDS:
@@ -816,13 +867,20 @@ def create_app(testing=False):
               if value:
                 metadata[field] = value
 
-            final_text = rebuild_memory_text(txt, metadata)
+            license_value = request.form.get(MEMORY_LICENSE_FIELD, "").strip() or metadata.get(MEMORY_LICENSE_FIELD, "")
+            if license_value:
+              metadata[MEMORY_LICENSE_FIELD] = license_value
+
+            metadata["dc:identifier"] = suggested_id
+
+            final_text = rebuild_memory_text(txt, metadata, suggested_id)
             stored_path = _write_memory_text_file(suggested_id, final_text)
             memory = Memory(
               custom_id=suggested_id,
               title=metadata.get("dc:title", suggested_id),
               text=final_text,
               file_path=stored_path,
+              license=metadata.get(MEMORY_LICENSE_FIELD, "") or None,
             )
             session.add(memory)
             session.commit()
@@ -850,6 +908,7 @@ def create_app(testing=False):
       suggested_id=suggested_id,
       form_metadata=form_metadata,
       detected_count=detected_count,
+      memory_license_options=MEMORY_LICENSE_OPTIONS,
     )
 
   @app.route("/memories/<int:memory_id>/edit", methods=["POST"])
@@ -865,10 +924,14 @@ def create_app(testing=False):
     posted_text = request.form.get("text")
     updated_text = posted_text if posted_text is not None else (memory.text or "")
     memory_metadata_ops = False
+    memory_license_value = request.form.get("memory_license", "").strip() or _memory_license_value(memory)
 
     deleted_memory_fields = set()
     deleted_cho_fields = set()
+    deleted_cho_indices = set()
     metadata_map = _memory_metadata_dict(updated_text)
+    if memory_license_value:
+      metadata_map[MEMORY_LICENSE_FIELD] = memory_license_value
 
     for key in request.form:
       if key.startswith("delete_memory_metadata[") and key.endswith("]"):
@@ -878,11 +941,15 @@ def create_app(testing=False):
         metadata_map.pop(field, None)
         updated_text = _remove_metadata_tag(updated_text, field, MetadataType.MEMORY.value)
       elif key.startswith("delete_cho_metadata[") and "]" in key:
-        remainder = key[len("delete_cho_metadata["):]
-        cho_id, field = remainder.split("][")
-        field = field[:-1]
-        deleted_cho_fields.add((cho_id, field))
-        updated_text = _remove_metadata_tag(updated_text, field, MetadataType.CHO.value, cho=cho_id)
+        if key.endswith("]"):
+          remainder = key[len("delete_cho_metadata["):-1]
+          if "][" in remainder:
+            cho_id, field = remainder.split("][", 1)
+            deleted_cho_fields.add((cho_id, field))
+            updated_text = _remove_metadata_tag(updated_text, field, MetadataType.CHO.value, cho=cho_id)
+          else:
+            deleted_cho_indices.add(remainder)
+            updated_text = _remove_nth_cho_tag(updated_text, remainder)
       elif key == "delete_memory_metadata" and request.form.get(key):
         memory_metadata_ops = True
         metadata_map.pop(request.form.get(key), None)
@@ -919,11 +986,12 @@ def create_app(testing=False):
 
     if memory_metadata_ops:
       if metadata_map:
-        updated_text = rebuild_memory_text(updated_text, metadata_map)
+        updated_text = rebuild_memory_text(updated_text, metadata_map, memory.custom_id or memory.id)
       else:
         updated_text = _strip_memory_metadata_block(updated_text).strip()
 
     _persist_memory_to_disk(memory, updated_text)
+    memory.license = memory_license_value or None
     if "title" not in request.form:
       memory.title = get_memory_title(memory.text or "", memory.title or f"Memory {memory.id}")
     session.add(memory)
@@ -1059,6 +1127,7 @@ def create_app(testing=False):
       cho_metadata_items=cho_metadata_items,
       cho_fields=CHO_FIELDS,
       memory_fields=MEMORY_FIELDS,
+      memory_license_options=MEMORY_LICENSE_OPTIONS,
       nodes=nodes,
       edges=edges,
       focus_cho=focus_cho,
@@ -1146,6 +1215,7 @@ def create_app(testing=False):
       selected_cho=selected_cho,
       memory_columns=memory_columns,
       matrix_rows=matrix_rows,
+      field_descriptions={row["field"]: _metadata_description(row["field"]) for row in matrix_rows},
     )
 
   @app.route("/export/memory/<int:memory_id>.rdf")

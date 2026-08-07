@@ -384,6 +384,17 @@ HTML_TEMPLATE = """
                   </div>
 
                   <div class="tag-section">
+                    <h4>Memory license</h4>
+                    <p class="tag-help">Choose the license associated with this memory.</p>
+                    <select name="memory_license">
+                      <option value="">Select a license</option>
+                      {% for license_option in memory_license_options %}
+                      <option value="{{ license_option }}" {% if selected_memory.license == license_option %}selected{% endif %}>{{ license_option }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+
+                  <div class="tag-section">
                       <div class="cho-tags-head">
                         <button type="submit" name="remove_selected" value="1" onclick="return confirm('Remove selected metadata tags?');">Remove selected tags</button>
                         <h4>CHO tags in this memory</h4>
@@ -392,7 +403,7 @@ HTML_TEMPLATE = """
                     <div class="tag-list cho-tags-list is-collapsed" id="cho-tags-list">
                       {% for md in cho_metadata_items %}
                       <label class="tag-selector">
-                        <input type="checkbox" name="delete_cho_metadata[{{ md.cho }}][{{ md.field }}]" value="1">
+                        <input type="checkbox" name="delete_cho_metadata[{{ md.index }}]" value="1">
                         <span class="pill cho">{{ md.cho }} / {{ md.field }}: {{ md.value }}</span>
                       </label>
                       {% else %}
@@ -995,7 +1006,7 @@ COMPARE_TEMPLATE = """
             <tbody>
               {% for row in matrix_rows %}
               <tr>
-                <td>{{ row.field }}</td>
+                <td><span title="{{ field_descriptions.get(row.field, row.field) }}">{{ row.field }}</span></td>
                 {% for memory in memory_columns %}
                 <td>{{ row['values'].get(memory.id, '—') }}</td>
                 {% endfor %}
@@ -1065,6 +1076,13 @@ IMPORT_TEMPLATE = """
           <input name="dc:subject" value="{{ form_metadata.get('dc:subject', '') }}" placeholder="Subject">
           <label>Description</label>
           <textarea name="dc:description" placeholder="Description">{{ form_metadata.get('dc:description', '') }}</textarea>
+          <label>License</label>
+          <select name="dc:license">
+            <option value="">Select a license</option>
+            {% for license_option in memory_license_options %}
+            <option value="{{ license_option }}" {% if form_metadata.get('dc:license', '') == license_option %}selected{% endif %}>{{ license_option }}</option>
+            {% endfor %}
+          </select>
           <button type="submit">Import memory</button>
           {% endif %}
         </form>

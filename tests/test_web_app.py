@@ -2,6 +2,7 @@ import io
 import os
 import re
 import unittest
+import tempfile
 
 from db import CHO, Memory, session
 from web_app import create_app
@@ -324,6 +325,55 @@ class WebAppTests(unittest.TestCase):
             session.delete(cho)
             session.commit()
 
+    def test_compare_field_labels_include_tooltips(self):
+        cho = CHO(custom_id='CHO-COMPARE-DESC', title='Compare CHO')
+        memory = Memory(
+            custom_id='test-compare-memory-desc',
+            title='Compare memory',
+            text='This is <dc:title cho="CHO-COMPARE-DESC">linked value</dc:title> text',
+            file_path='demo.txt'
+        )
+        session.add(cho)
+        session.add(memory)
+        session.commit()
+
+        try:
+            response = self.client.get('/compare?cho_id=CHO-COMPARE-DESC')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'title="Primary name or title of the resource."', response.data)
+        finally:
+            session.delete(memory)
+            session.delete(cho)
+            session.commit()
+
+    def test_delete_duplicate_cho_metadata_removes_selected_occurrence(self):
+        memory = Memory(
+            custom_id='test-delete-duplicate-cho-md',
+            title='Duplicate CHO metadata',
+            text='Before <dc:type cho="PR75">first</dc:type> and <dc:type cho="PR75">second</dc:type> after',
+            file_path='demo.txt'
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.post(
+                f'/memories/{memory.id}/edit',
+                data={
+                    'title': 'Duplicate CHO metadata',
+                    'delete_cho_metadata[1]': '1',
+                },
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            updated = session.get(Memory, memory.id)
+            self.assertIn('<dc:type cho="PR75">first</dc:type>', updated.text)
+            self.assertNotIn('<dc:type cho="PR75">second</dc:type>', updated.text)
+        finally:
+            session.delete(memory)
+            session.commit()
+
     def test_export_memory_rdf_download(self):
         memory = Memory(
             custom_id='test-export-memory',
@@ -521,6 +571,65 @@ class WebAppTests(unittest.TestCase):
                 if imported_now.file_path and os.path.exists(imported_now.file_path):
                     os.remove(imported_now.file_path)
                 session.delete(imported_now)
+                session.commit()
+
+    def test_import_memory_retrieves_identifier_and_license_from_preamble(self):
+        memory_id = 'imported-memory-7'
+        existing_text = (
+            '=== MEMORY METADATA START ===\n'
+            f'<dc:identifier type="memory">{memory_id}</dc:identifier>\n'
+            '<dc:license type="memory">CC BY-SA</dc:license>\n'
+            '<dc:title type="memory">Imported title</dc:title>\n'
+            '=== MEMORY METADATA END ===\n\n'
+            'Body text'
+        )
+
+        prepare_response = self.client.post(
+            '/memories/import',
+            data={
+                'stage': 'prepare',
+                'id': '',
+                'file': (io.BytesIO(existing_text.encode('utf-8')), 'memory.txt'),
+            },
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        self.assertEqual(prepare_response.status_code, 200)
+        self.assertIn(b'Imported title', prepare_response.data)
+
+        temp_path_match = re.search(rb'name="temp_path" value="([^"]+)"', prepare_response.data)
+        self.assertIsNotNone(temp_path_match)
+        temp_path = temp_path_match.group(1).decode('utf-8')
+
+        response = self.client.post(
+            '/memories/import',
+            data={
+                'stage': 'confirm',
+                'temp_path': temp_path,
+                'id': '',
+                'dc:title': 'Imported title',
+                'dc:creator': '',
+                'dc:date': '',
+                'dc:subject': '',
+                'dc:description': '',
+                'dc:license': '',
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        imported = session.query(Memory).filter(Memory.custom_id == memory_id).first()
+        self.assertIsNotNone(imported)
+
+        try:
+            self.assertEqual(imported.license, 'CC BY-SA')
+            self.assertIn('<dc:identifier type="memory">imported-memory-7</dc:identifier>', imported.text)
+            self.assertIn('<dc:license type="memory">CC BY-SA</dc:license>', imported.text)
+        finally:
+            if imported is not None:
+                if imported.file_path and os.path.exists(imported.file_path):
+                    os.remove(imported.file_path)
+                session.delete(imported)
                 session.commit()
 
     def test_delete_cho_metadata_does_not_duplicate_text(self):

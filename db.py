@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Text
+from sqlalchemy import create_engine, Column, Integer, String, Text, inspect
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 # =========================
@@ -27,6 +27,7 @@ class Memory(Base):
     title = Column(String)
     text = Column(Text)
     file_path = Column(String)
+    license = Column(String)
 
 
 # =========================
@@ -51,6 +52,17 @@ engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
 # CREATE TABLES
 # =========================
 Base.metadata.create_all(engine)
+
+
+def _ensure_memory_license_column():
+    inspector = inspect(engine)
+    existing_columns = {column["name"] for column in inspector.get_columns("memories")}
+    if "license" not in existing_columns:
+        with engine.begin() as connection:
+            connection.exec_driver_sql("ALTER TABLE memories ADD COLUMN license VARCHAR")
+
+
+_ensure_memory_license_column()
 
 
 # =========================
