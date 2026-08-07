@@ -5,9 +5,11 @@ from services.metadata import extract_metadata
 def show_cho_tree(cid):
     tree = make_tree_window(f"CHO {cid}")
     root = tree.insert("", "end", text=f"CHO {cid}")
+    memories = list(session.query(Memory))
+    metadata_by_memory_id = {memory.id: extract_metadata(memory.text) for memory in memories}
 
-    for m in session.query(Memory):
-        meta = [x for x in extract_metadata(m.text) if x["cho"] == cid]
+    for m in memories:
+        meta = [x for x in metadata_by_memory_id.get(m.id, []) if x["cho"] == cid]
 
         if meta:
             mem_node = tree.insert(root, "end", text=m.custom_id)

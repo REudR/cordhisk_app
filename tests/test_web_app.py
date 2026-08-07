@@ -29,6 +29,12 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(b'Add CHO metadata', response.data)
 
+    def test_index_page_includes_license_options(self):
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'CC BY-SA 3.0 IGO', response.data)
+        self.assertIn(b'CC BY-NC-ND', response.data)
+
     def test_edit_memory_updates_database(self):
         memory = Memory(
             custom_id='test-memory',
@@ -658,6 +664,39 @@ class WebAppTests(unittest.TestCase):
             updated = session.get(Memory, memory.id)
             self.assertNotIn('<dc:title cho="PR75">', updated.text)
             self.assertEqual(updated.text.count('watch'), 1)
+        finally:
+            session.delete(memory)
+            session.commit()
+
+    def test_save_memory_license_updates_preamble_and_database(self):
+        memory = Memory(
+            custom_id='test-memory-license-save',
+            title='License test',
+            text='Body text only',
+            file_path='demo.txt',
+            license='CC BY'
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.post(
+                f'/memories/{memory.id}/edit',
+                data={
+                    'title': 'License test',
+                    'text': 'Body text only',
+                    'memory_license': 'CC BY-SA 3.0 IGO',
+                    'save_memory_license': '1',
+                },
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+
+            updated = session.get(Memory, memory.id)
+            self.assertEqual(updated.license, 'CC BY-SA 3.0 IGO')
+            self.assertIn('<dc:identifier type="memory">test-memory-license-save</dc:identifier>', updated.text)
+            self.assertIn('<dc:license type="memory">CC BY-SA 3.0 IGO</dc:license>', updated.text)
         finally:
             session.delete(memory)
             session.commit()

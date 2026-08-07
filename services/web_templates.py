@@ -392,6 +392,7 @@ HTML_TEMPLATE = """
                       <option value="{{ license_option }}" {% if selected_memory.license == license_option %}selected{% endif %}>{{ license_option }}</option>
                       {% endfor %}
                     </select>
+                    <button type="submit" name="save_memory_license" value="1">Save license</button>
                   </div>
 
                   <div class="tag-section">

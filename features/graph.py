@@ -120,6 +120,8 @@ def generate_graph(frame, state):
     node_types = {}
     node_data = {}
     node_counts = defaultdict(int)
+    memories = list(session.query(Memory))
+    metadata_by_memory_id = {memory.id: extract_metadata(memory.text) for memory in memories}
 
     cho_cache = {c.custom_id: c.title for c in session.query(CHO)}
 
@@ -170,7 +172,7 @@ def generate_graph(frame, state):
         mn = f"memory:{m.custom_id}"
 
         add_node(mn, "memory", m)
-        add_metadata(mn, extract_metadata(m.text))
+        add_metadata(mn, metadata_by_memory_id.get(m.id, []))
 
     # CHO VIEW
     else:
@@ -179,8 +181,8 @@ def generate_graph(frame, state):
 
         add_node(cn, "cho", cid)
 
-        for m in session.query(Memory):
-            md_list = extract_metadata(m.text)
+        for m in memories:
+            md_list = metadata_by_memory_id.get(m.id, [])
 
             cho_md = [md for md in md_list if md.get("cho") == cid]
             memory_md = [md for md in md_list if md.get("type") == MetadataType.MEMORY.value]
