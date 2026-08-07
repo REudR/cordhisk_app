@@ -16,8 +16,8 @@ HTML_TEMPLATE = """
         --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
       }
       body { font-family: "Avenir Next", "Segoe UI", sans-serif; margin: 0; background: radial-gradient(circle at 10% 10%, #f9fbfc 0%, var(--bg) 52%, #e8eef2 100%); color: var(--ink); }
-      .shell { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
-      .sidebar { background: linear-gradient(180deg, #0f3b5a 0%, #0d5660 100%); color: white; padding: 20px; display: flex; flex-direction: column; }
+      .shell { display: grid; grid-template-columns: 450px 1fr; min-height: 100vh; }
+      .sidebar { background: linear-gradient(180deg, #0f3b5a 0%, #0d5660 100%); color: white; padding: 20px; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
       .sidebar h2 { margin: 0 0 4px; }
       .sidebar-subtitle { margin: 0 0 10px; font-size: 14px; }
       .content { padding: 24px; }
@@ -100,7 +100,7 @@ HTML_TEMPLATE = """
       .memory-mode-hide { display: none; }
       .sidebar-list { list-style: none; margin: 0; padding: 0; }
       .sidebar-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-      .sidebar-list a { color: #0f172a; display: inline-block; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .sidebar-list a { color: #0f172a; display: inline-block; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .mini-delete { width: 24px; min-width: 24px; height: 24px; line-height: 24px; padding: 0; border-radius: 999px; background: #facc15; color: #1f2937; font-weight: 700; font-size: 14px; }
       .sidebar-action { margin-bottom: 12px; }
       .sidebar-action button { width: 100%; background: #0ea5e9; }
@@ -121,10 +121,16 @@ HTML_TEMPLATE = """
       .cho-tags-head h4 { margin: 0; }
       .cho-tags-head .toggle-cho-tags { background: #475569; padding: 6px 10px; font-size: 12px; }
       .cho-tags-head .toggle-cho-tags[aria-expanded="false"] { background: #64748b; }
-      .cho-tags-list.is-collapsed { display: none; }
-      .list-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+      .cho-filter-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .cho-filter-row label { font-size: 12px; color: #475569; }
+      .cho-filter-row select { margin-bottom: 0; }
+      .cho-filter-count { font-size: 12px; color: #64748b; white-space: nowrap; }
+      .cho-tag-item.hidden { display: none; }
+      .list-selector { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; }
       .list-selector button { background: #334155; font-size: 12px; padding: 6px 8px; }
       .list-selector button.active { background: #0072b2; }
+      .sidebar-list-shell { flex: 1 1 auto; min-height: 180px; margin-bottom: 12px; }
+      .sidebar-list-shell .list-panel { margin-bottom: 0; height: 100%; overflow-y: auto; }
       .list-panel.hidden { display: none; }
       .inline-annotation-row { display: grid; grid-template-columns: minmax(170px, 1fr) minmax(170px, 1fr) auto; gap: 8px; align-items: end; }
       .inline-annotation-row > div { min-width: 0; }
@@ -218,30 +224,116 @@ HTML_TEMPLATE = """
         <div class="list-selector">
           <button type="button" id="show-memories-btn" class="active">Memories</button>
           <button type="button" id="show-chos-btn">CHO records</button>
+          <button type="button" id="show-tags-btn" {% if not selected_memory %}disabled{% endif %}>Tags</button>
         </div>
-        <div class="card sidebar-card list-panel" id="memories-panel">
-          <ul class="sidebar-list">
-            {% for memory in memories %}
-            <li>
-              <a href="/?memory_id={{ memory.id }}">{{ memory.custom_id or memory.id }} — {{ memory.title or ('Memory ' ~ memory.id) }}</a>
-              <form action="/memories/{{ memory.id }}/delete" method="post" onsubmit="return confirm('Delete this memory permanently?');">
-                <button type="submit" class="mini-delete" title="Delete memory">-</button>
+        <div class="sidebar-list-shell">
+          <div class="card sidebar-card list-panel" id="memories-panel">
+            <ul class="sidebar-list">
+              {% for memory in memories %}
+              <li>
+                <a href="/?memory_id={{ memory.id }}">{{ memory.custom_id or memory.id }} — {{ memory.title or ('Memory ' ~ memory.id) }}</a>
+                <form action="/memories/{{ memory.id }}/delete" method="post" onsubmit="return confirm('Delete this memory permanently?');">
+                  <button type="submit" class="mini-delete" title="Delete memory">-</button>
+                </form>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          <div class="card sidebar-card list-panel hidden" id="chos-panel">
+            <ul class="sidebar-list">
+              {% for cho in chos %}
+              <li>
+                <a href="/?memory_id={{ selected_memory.id if selected_memory else '' }}&focus_cho={{ cho.custom_id or cho.id }}">{{ cho.custom_id or cho.id }} — {{ cho.title or cho.custom_id or cho.id }}</a>
+                <form action="/chos/{{ cho.id }}/delete{% if selected_memory %}?memory_id={{ selected_memory.id }}{% endif %}" method="post" onsubmit="return confirm('Delete this CHO and remove its tags from all memories?');">
+                  <button type="submit" class="mini-delete" title="Delete CHO">-</button>
+                </form>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          <div class="card sidebar-card list-panel hidden" id="tags-panel">
+            {% if selected_memory %}
+            <div id="memory-tags-panel">
+              <div class="cho-tags-head">
+                <h4>Memory tags</h4>
+              </div>
+              <form action="/memories/{{ selected_memory.id }}/edit" method="post" id="memory-metadata-form">
+                <input type="hidden" name="focus_cho" value="{{ focus_cho or '' }}">
+                <input type="hidden" id="inline-edit-field" name="edit_memory_metadata_field" value="">
+                <input type="hidden" id="inline-edit-value" name="edit_memory_metadata_value" value="">
+
+                <div class="tag-section">
+                  <p class="tag-help">Double-click a memory tag to update its value. Use checkboxes and remove selected tags.</p>
+                  <div class="tag-list">
+                    {% if selected_memory.license %}
+                    <label class="tag-selector">
+                      <input type="checkbox" name="delete_memory_metadata[dc:license]" value="1">
+                      <span class="pill memory memory-editable" data-memory-field="dc:license" data-memory-value="{{ selected_memory.license }}">dc:license: {{ selected_memory.license }}</span>
+                    </label>
+                    {% endif %}
+                    {% for md in memory_metadata_items %}
+                    <label class="tag-selector">
+                      <input type="checkbox" name="delete_memory_metadata[{{ md.field }}]" value="1">
+                      <span class="pill memory memory-editable" data-memory-field="{{ md.field }}" data-memory-value="{{ md.value }}">{{ md.field }}: {{ md.value }}</span>
+                    </label>
+                    {% else %}
+                    <span class="pill memory">No memory metadata</span>
+                    {% endfor %}
+                    <button type="button" class="pill add" id="open-add-memory-tag" title="Add memory metadata">+</button>
+                  </div>
+                </div>
+
+                <div id="add-memory-tag-box" class="metadata-inline-edit">
+                  <label>Field</label>
+                  <select name="new_memory_metadata_field">
+                    {% for field in memory_fields %}
+                    <option value="{{ field.field }}">{{ field.label }} ({{ field.field }})</option>
+                    {% endfor %}
+                  </select>
+                  <label>Value</label>
+                  <input name="new_memory_metadata_value" placeholder="New value">
+                  <label>License</label>
+                  <select name="memory_license" id="new-memory-license-value">
+                    <option value="">Select a license</option>
+                    {% for license_option in memory_license_options %}
+                    <option value="{{ license_option }}" {% if selected_memory.license == license_option %}selected{% endif %}>{{ license_option }}</option>
+                    {% endfor %}
+                  </select>
+                  <div class="metadata-inline-edit-actions">
+                    <button type="submit">Save metadata changes</button>
+                    <button type="submit" name="save_memory_license" value="1">Save license</button>
+                  </div>
+                </div>
+
+                <div class="tag-section">
+                  <div class="cho-tags-head">
+                    <button type="submit" name="remove_selected" value="1" onclick="return confirm('Remove selected metadata tags?');">Remove selected tags</button>
+                    <h4>CHO tags in this memory</h4>
+                  </div>
+                  <div class="cho-filter-row">
+                    <label for="cho-tag-filter">Filter CHO</label>
+                    <select id="cho-tag-filter" name="cho_tag_filter">
+                      <option value="">All CHO</option>
+                    </select>
+                    <span id="cho-tag-count" class="cho-filter-count"></span>
+                  </div>
+                  <div class="tag-list cho-tags-list" id="cho-tags-list">
+                    {% for md in cho_metadata_items %}
+                    <label class="tag-selector cho-tag-item" data-cho-id="{{ md.cho }}">
+                      <input type="checkbox" name="delete_cho_metadata[{{ md.index }}]" value="1">
+                      <span class="pill cho">{{ md.cho }} / {{ md.field }}: {{ md.value }}</span>
+                    </label>
+                    {% else %}
+                    <span class="pill cho">No CHO metadata</span>
+                    {% endfor %}
+                  </div>
+                </div>
               </form>
-            </li>
-            {% endfor %}
-          </ul>
-        </div>
-        <div class="card sidebar-card list-panel hidden" id="chos-panel">
-          <ul class="sidebar-list">
-            {% for cho in chos %}
-            <li>
-              <a href="/?memory_id={{ selected_memory.id if selected_memory else '' }}&focus_cho={{ cho.custom_id or cho.id }}">{{ cho.custom_id or cho.id }} — {{ cho.title or cho.custom_id or cho.id }}</a>
-              <form action="/chos/{{ cho.id }}/delete{% if selected_memory %}?memory_id={{ selected_memory.id }}{% endif %}" method="post" onsubmit="return confirm('Delete this CHO and remove its tags from all memories?');">
-                <button type="submit" class="mini-delete" title="Delete CHO">-</button>
-              </form>
-            </li>
-            {% endfor %}
-          </ul>
+            </div>
+            {% else %}
+            <p>Select a memory to edit memory and CHO tags.</p>
+            {% endif %}
+          </div>
         </div>
         <p class="sidebar-footer-note">
           Developped by Rafael Ramirez Eudave at the Delft University of Technology (2026).<br>
@@ -329,8 +421,9 @@ HTML_TEMPLATE = """
               </form>
             </div>
             {% endif %}
+            {% if focus_cho %}
             <div class="card metadata-card">
-              {% if focus_cho and selected_cho_details %}
+              {% if selected_cho_details %}
                 <h4>CHO {{ selected_cho_details.label }} — {{ selected_cho_details.title }}</h4>
                 <p class="metadata-helper">Metadata grouped by memory for the selected CHO.</p>
                 {% for group in selected_cho_details.memories %}
@@ -347,76 +440,9 @@ HTML_TEMPLATE = """
                 {% endfor %}
               {% elif focus_cho %}
                 <p>Select a CHO from the sidebar or graph to view CHO metadata grouped by memory.</p>
-              {% else %}
-                <form action="/memories/{{ selected_memory.id }}/edit" method="post" id="memory-metadata-form">
-                  <input type="hidden" name="focus_cho" value="{{ focus_cho or '' }}">
-                  <input type="hidden" id="inline-edit-field" name="edit_memory_metadata_field" value="">
-                  <input type="hidden" id="inline-edit-value" name="edit_memory_metadata_value" value="">
-
-                  <div class="tag-section">
-                    <h4>Memory tags</h4>
-                    <p class="tag-help">Double-click a memory tag to update its value. Use checkboxes and remove selected tags.</p>
-                    <div class="tag-list">
-                      {% if selected_memory.license %}
-                      <label class="tag-selector">
-                        <input type="checkbox" name="delete_memory_metadata[dc:license]" value="1">
-                        <span class="pill memory memory-editable" data-memory-field="dc:license" data-memory-value="{{ selected_memory.license }}">dc:license: {{ selected_memory.license }}</span>
-                      </label>
-                      {% endif %}
-                      {% for md in memory_metadata_items %}
-                      <label class="tag-selector">
-                        <input type="checkbox" name="delete_memory_metadata[{{ md.field }}]" value="1">
-                        <span class="pill memory memory-editable" data-memory-field="{{ md.field }}" data-memory-value="{{ md.value }}">{{ md.field }}: {{ md.value }}</span>
-                      </label>
-                      {% else %}
-                      <span class="pill memory">No memory metadata</span>
-                      {% endfor %}
-                      <button type="button" class="pill add" id="open-add-memory-tag" title="Add memory metadata">+</button>
-                    </div>
-                  </div>
-
-                  <div id="add-memory-tag-box" class="metadata-inline-edit">
-                    <label>Field</label>
-                    <select name="new_memory_metadata_field">
-                      {% for field in memory_fields %}
-                      <option value="{{ field.field }}">{{ field.label }} ({{ field.field }})</option>
-                      {% endfor %}
-                    </select>
-                    <label>Value</label>
-                    <input name="new_memory_metadata_value" placeholder="New value">
-                    <label>License</label>
-                    <select name="memory_license" id="new-memory-license-value">
-                      <option value="">Select a license</option>
-                      {% for license_option in memory_license_options %}
-                      <option value="{{ license_option }}" {% if selected_memory.license == license_option %}selected{% endif %}>{{ license_option }}</option>
-                      {% endfor %}
-                    </select>
-                      <div class="metadata-inline-edit-actions">
-                        <button type="submit">Save metadata changes</button>
-                        <button type="submit" name="save_memory_license" value="1">Save license</button>
-                      </div>
-                  </div>
-
-                  <div class="tag-section">
-                      <div class="cho-tags-head">
-                        <button type="submit" name="remove_selected" value="1" onclick="return confirm('Remove selected metadata tags?');">Remove selected tags</button>
-                        <h4>CHO tags in this memory</h4>
-                        <button type="button" class="toggle-cho-tags" id="toggle-cho-tags" aria-expanded="false" aria-controls="cho-tags-list">Expand</button>
-                      </div>
-                    <div class="tag-list cho-tags-list is-collapsed" id="cho-tags-list">
-                      {% for md in cho_metadata_items %}
-                      <label class="tag-selector">
-                        <input type="checkbox" name="delete_cho_metadata[{{ md.index }}]" value="1">
-                        <span class="pill cho">{{ md.cho }} / {{ md.field }}: {{ md.value }}</span>
-                      </label>
-                      {% else %}
-                      <span class="pill cho">No CHO metadata</span>
-                      {% endfor %}
-                    </div>
-                  </div>
-                </form>
               {% endif %}
             </div>
+            {% endif %}
           </div>
         </div>
         {% else %}
@@ -455,9 +481,13 @@ HTML_TEMPLATE = """
         const exportChoPop = document.getElementById('export-cho-pop');
         const showMemoriesBtn = document.getElementById('show-memories-btn');
         const showChosBtn = document.getElementById('show-chos-btn');
+        const showTagsBtn = document.getElementById('show-tags-btn');
         const memoriesPanel = document.getElementById('memories-panel');
         const chosPanel = document.getElementById('chos-panel');
-        const toggleChoTagsButton = document.getElementById('toggle-cho-tags');
+        const tagsPanel = document.getElementById('tags-panel');
+        const choTagFilter = document.getElementById('cho-tag-filter');
+        const choTagCount = document.getElementById('cho-tag-count');
+        const choTagItems = Array.from(document.querySelectorAll('.cho-tag-item'));
         const choTagsList = document.getElementById('cho-tags-list');
         const scrollStateKey = 'cordhisk:scroll:{{ selected_memory.id if selected_memory else "none" }}';
         let zoomLevel = 1;
@@ -652,34 +682,68 @@ HTML_TEMPLATE = """
           });
         }
 
-        if (showMemoriesBtn && showChosBtn && memoriesPanel && chosPanel) {
+        if (showMemoriesBtn && showChosBtn && memoriesPanel && chosPanel && tagsPanel) {
           const selectList = function (target) {
             const showMemories = target === 'memories';
+            const showChos = target === 'chos';
+            const showTags = target === 'tags';
             memoriesPanel.classList.toggle('hidden', !showMemories);
-            chosPanel.classList.toggle('hidden', showMemories);
+            chosPanel.classList.toggle('hidden', !showChos);
+            tagsPanel.classList.toggle('hidden', !showTags);
             showMemoriesBtn.classList.toggle('active', showMemories);
-            showChosBtn.classList.toggle('active', !showMemories);
+            showChosBtn.classList.toggle('active', showChos);
+            if (showTagsBtn) {
+              showTagsBtn.classList.toggle('active', showTags);
+            }
           };
           showMemoriesBtn.addEventListener('click', function () { selectList('memories'); });
           showChosBtn.addEventListener('click', function () { selectList('chos'); });
+          if (showTagsBtn) {
+            showTagsBtn.addEventListener('click', function () { selectList('tags'); });
+          }
           {% if focus_cho %}
           selectList('chos');
+          {% elif selected_memory %}
+          selectList('tags');
           {% else %}
           selectList('memories');
           {% endif %}
         }
 
-        if (toggleChoTagsButton && choTagsList) {
-          const setChoTagsCollapsed = function (collapsed) {
-            choTagsList.classList.toggle('is-collapsed', collapsed);
-            toggleChoTagsButton.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-            toggleChoTagsButton.textContent = collapsed ? 'Expand' : 'Collapse';
-          };
-          toggleChoTagsButton.addEventListener('click', function () {
-            const isCollapsed = choTagsList.classList.contains('is-collapsed');
-            setChoTagsCollapsed(!isCollapsed);
+        if (choTagFilter && choTagItems.length) {
+          const choValues = Array.from(new Set(choTagItems.map(function (item) {
+            return item.getAttribute('data-cho-id') || '';
+          }).filter(function (value) { return value; }))).sort();
+          choValues.forEach(function (value) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            choTagFilter.appendChild(option);
           });
-          setChoTagsCollapsed(true);
+
+          const applyChoTagFilter = function () {
+            const selectedCho = (choTagFilter.value || '').trim();
+            let visibleCount = 0;
+            choTagItems.forEach(function (item) {
+              const itemCho = (item.getAttribute('data-cho-id') || '').trim();
+              const visible = !selectedCho || selectedCho === itemCho;
+              item.classList.toggle('hidden', !visible);
+              if (visible) {
+                visibleCount += 1;
+              }
+            });
+            if (choTagCount) {
+              choTagCount.textContent = visibleCount + ' shown / ' + choTagItems.length + ' total';
+            }
+          };
+
+          choTagFilter.addEventListener('change', applyChoTagFilter);
+          applyChoTagFilter();
+        } else if (choTagFilter && choTagsList && choTagsList.textContent && choTagsList.textContent.includes('No CHO metadata')) {
+          choTagFilter.disabled = true;
+          if (choTagCount) {
+            choTagCount.textContent = '0 shown / 0 total';
+          }
         }
 
         if (memoryMetadataForm) {
