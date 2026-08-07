@@ -129,7 +129,7 @@ HTML_TEMPLATE = """
       .list-selector { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; }
       .list-selector button { background: #334155; font-size: 12px; padding: 6px 8px; }
       .list-selector button.active { background: #0072b2; }
-      .sidebar-list-shell { flex: 1 1 auto; min-height: 180px; margin-bottom: 12px; }
+      .sidebar-list-shell { flex: 0 0 auto; min-height: 180px; max-height: 64vh; margin-bottom: 12px; }
       .sidebar-list-shell .list-panel { margin-bottom: 0; height: 100%; overflow-y: auto; }
       .list-panel.hidden { display: none; }
       .inline-annotation-row { display: grid; grid-template-columns: minmax(170px, 1fr) minmax(170px, 1fr) auto; gap: 8px; align-items: end; }
@@ -144,14 +144,17 @@ HTML_TEMPLATE = """
       .right-panel { display: flex; flex-direction: column; }
       .right-panel .metadata-card { order: 1; }
       .right-panel .memory-text-card { order: 2; }
-      .memory-text-scroll { max-height: 420px; overflow-y: auto; }
-      .sidebar-footer-note {
-        margin-top: auto;
-        padding-top: 14px;
+      .right-panel .project-footer-note { order: 3; }
+      .memory-text-card { height: 64vh; display: flex; flex-direction: column; }
+      .memory-text-card form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+      .memory-text-scroll { flex: 1; min-height: 0; max-height: none; overflow-y: auto; }
+      .project-footer-note {
+        margin-top: 0;
+        padding-top: 12px;
         font-size: 11px;
         line-height: 1.35;
-        color: #d7e5ee;
-        border-top: 1px solid rgba(215, 229, 238, 0.35);
+        color: #475569;
+        border-top: 1px solid #dbe4f0;
       }
       @media (max-width: 980px) {
         .shell { grid-template-columns: 1fr; }
@@ -167,13 +170,14 @@ HTML_TEMPLATE = """
         .graph-card { min-height: auto; }
         svg { min-width: 680px; }
         .inline-annotation-row { grid-template-columns: 1fr; }
+        .memory-text-card { height: auto; }
       }
     </style>
   </head>
   <body>
     <div class="shell">
       <aside class="sidebar">
-        <h2>CORDHISK v2.1</h2>
+        <h2>CORDHISK 2.2</h2>
         <p class="sidebar-subtitle">Metadata workspace for memories & cultural heritage objects (CHO).</p>
         <button type="button" class="menu-toggle" id="toggle-menu">Menu</button>
         <div class="sidebar-menu hidden" id="sidebar-menu">
@@ -335,10 +339,6 @@ HTML_TEMPLATE = """
             {% endif %}
           </div>
         </div>
-        <p class="sidebar-footer-note">
-          Developped by Rafael Ramirez Eudave at the Delft University of Technology (2026).<br>
-          The Community-driven Digitisation for Heritage at Risk (CORDHISK) project is funded by the European Union's Horizon Europe 2023 (Marie Sklodowska Curie grant agreement No 101149833).
-        </p>
       </aside>
       <main class="content">
         {% if notice_message %}
@@ -347,7 +347,6 @@ HTML_TEMPLATE = """
         {% if selected_memory %}
         <div class="grid">
           <div class="card graph-card">
-            <h3>Memory relationship graph</h3>
             <div class="graph-toolbar">
               <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
               <button type="button" id="zoom-out" aria-label="Zoom out">-</button>
@@ -398,7 +397,7 @@ HTML_TEMPLATE = """
                     </select>
                   </div>
                   <div>
-                    <button type="submit">Add annotation</button>
+                    <button type="submit">Add</button>
                   </div>
                 </div>
                 </div>
@@ -420,6 +419,10 @@ HTML_TEMPLATE = """
                 <input type="hidden" name="focus_cho" value="{{ focus_cho or '' }}">
               </form>
             </div>
+            <p class="project-footer-note">
+              Developped by Rafael Ramirez Eudave at the Delft University of Technology (2026).<br>
+              The Community-driven Digitisation for Heritage at Risk (CORDHISK) project is funded by the European Union's Horizon Europe 2023 (Marie Sklodowska Curie grant agreement No 101149833).
+            </p>
             {% endif %}
             {% if focus_cho %}
             <div class="card metadata-card">

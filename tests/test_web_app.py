@@ -73,7 +73,7 @@ class WebAppTests(unittest.TestCase):
     def test_graph_page_loads(self):
         response = self.client.get('/graph')
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b'Memory relationship graph', response.data)
+        self.assertIn(b'CORDHISK 2.2', response.data)
         self.assertIn(b'CHO records', response.data)
 
     def test_edit_cho_metadata_updates_memory_text(self):
