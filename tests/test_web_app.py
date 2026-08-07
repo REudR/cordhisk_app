@@ -106,6 +106,25 @@ class WebAppTests(unittest.TestCase):
         self.assertIn(b'graph-node', response.data.lower())
         self.assertIn(b'metadata-hidden', response.data.lower())
 
+    def test_graph_memory_node_uses_custom_id_in_details(self):
+        memory = Memory(
+            custom_id='TEST-MEMORY-ID',
+            title='Memory details test',
+            text='Body text',
+            file_path='demo.txt'
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.get(f'/?memory_id={memory.id}')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'data-details="TEST-MEMORY-ID"', response.data)
+        finally:
+            session.delete(memory)
+            session.commit()
+
     def test_delete_metadata_updates_memory_text(self):
         memory = Memory(
             custom_id='test-delete-metadata',
@@ -346,7 +365,7 @@ class WebAppTests(unittest.TestCase):
         try:
             response = self.client.get('/compare?cho_id=CHO-COMPARE-DESC')
             self.assertEqual(response.status_code, 200)
-            self.assertIn(b'title="Primary name or title of the resource."', response.data)
+            self.assertIn(b'title="The name given to the resource."', response.data)
         finally:
             session.delete(memory)
             session.delete(cho)

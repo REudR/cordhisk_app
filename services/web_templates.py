@@ -357,6 +357,12 @@ HTML_TEMPLATE = """
                     <h4>Memory tags</h4>
                     <p class="tag-help">Double-click a memory tag to update its value. Use checkboxes and remove selected tags.</p>
                     <div class="tag-list">
+                      {% if selected_memory.license %}
+                      <label class="tag-selector">
+                        <input type="checkbox" name="delete_memory_metadata[dc:license]" value="1">
+                        <span class="pill memory memory-editable" data-memory-field="dc:license" data-memory-value="{{ selected_memory.license }}">dc:license: {{ selected_memory.license }}</span>
+                      </label>
+                      {% endif %}
                       {% for md in memory_metadata_items %}
                       <label class="tag-selector">
                         <input type="checkbox" name="delete_memory_metadata[{{ md.field }}]" value="1">
@@ -378,21 +384,17 @@ HTML_TEMPLATE = """
                     </select>
                     <label>Value</label>
                     <input name="new_memory_metadata_value" placeholder="New value">
-                      <div class="metadata-inline-edit-actions">
-                        <button type="submit">Save metadata changes</button>
-                      </div>
-                  </div>
-
-                  <div class="tag-section">
-                    <h4>Memory license</h4>
-                    <p class="tag-help">Choose the license associated with this memory.</p>
-                    <select name="memory_license">
+                    <label>License</label>
+                    <select name="memory_license" id="new-memory-license-value">
                       <option value="">Select a license</option>
                       {% for license_option in memory_license_options %}
                       <option value="{{ license_option }}" {% if selected_memory.license == license_option %}selected{% endif %}>{{ license_option }}</option>
                       {% endfor %}
                     </select>
-                    <button type="submit" name="save_memory_license" value="1">Save license</button>
+                      <div class="metadata-inline-edit-actions">
+                        <button type="submit">Save metadata changes</button>
+                        <button type="submit" name="save_memory_license" value="1">Save license</button>
+                      </div>
                   </div>
 
                   <div class="tag-section">
@@ -443,6 +445,7 @@ HTML_TEMPLATE = """
         const resetButton = document.getElementById('reset-view');
         const addMemoryTagButton = document.getElementById('open-add-memory-tag');
         const addMemoryTagBox = document.getElementById('add-memory-tag-box');
+        const newMemoryLicenseValue = document.getElementById('new-memory-license-value');
         const memoryMetadataForm = document.getElementById('memory-metadata-form');
         const inlineEditField = document.getElementById('inline-edit-field');
         const inlineEditValue = document.getElementById('inline-edit-value');
@@ -602,6 +605,16 @@ HTML_TEMPLATE = """
             const field = pill.getAttribute('data-memory-field') || '';
             const currentValue = pill.getAttribute('data-memory-value') || '';
             if (!field) {
+              return;
+            }
+            if (field === 'dc:license') {
+              if (addMemoryTagBox) {
+                addMemoryTagBox.style.display = 'block';
+              }
+              if (newMemoryLicenseValue) {
+                newMemoryLicenseValue.value = currentValue;
+                newMemoryLicenseValue.focus();
+              }
               return;
             }
             const updated = window.prompt('Update value for ' + field, currentValue);
@@ -970,6 +983,8 @@ COMPARE_TEMPLATE = """
       .matrix th:first-child, .matrix td:first-child { min-width: 170px; font-weight: 600; background: #f8fafc; }
       .matrix-wrap { overflow: auto; }
       .back-btn { display: inline-block; padding: 8px 12px; border-radius: 6px; background: #1d4ed8; color: white; }
+      .field-name { border-bottom: 1px dotted #94a3b8; cursor: help; }
+      .field-help { margin-left: 6px; color: #64748b; font-size: 12px; cursor: help; }
     </style>
   </head>
   <body>
@@ -1007,7 +1022,10 @@ COMPARE_TEMPLATE = """
             <tbody>
               {% for row in matrix_rows %}
               <tr>
-                <td><span title="{{ field_descriptions.get(row.field, row.field) }}">{{ row.field }}</span></td>
+                <td>
+                  <span class="field-name" title="{{ field_descriptions.get(row.field, row.field) }}">{{ row.field }}</span>
+                  <span class="field-help" title="{{ field_descriptions.get(row.field, row.field) }}">i</span>
+                </td>
                 {% for memory in memory_columns %}
                 <td>{{ row['values'].get(memory.id, '—') }}</td>
                 {% endfor %}

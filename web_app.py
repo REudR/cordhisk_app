@@ -417,7 +417,7 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
       memory_link,
       36,
       "",
-      f"Memory {memory.id}",
+      memory.custom_id or str(memory.id),
     )
 
     metadata_items = metadata_by_memory_id.get(memory.id, [])
@@ -998,6 +998,9 @@ def create_app(testing=False):
     if request.form.get("new_memory_metadata_field") and request.form.get("new_memory_metadata_value", "").strip():
       memory_metadata_ops = True
       metadata_map[request.form.get("new_memory_metadata_field", "").strip()] = request.form.get("new_memory_metadata_value", "").strip()
+
+    if MEMORY_LICENSE_FIELD in deleted_memory_fields:
+      memory_license_value = ""
 
     if memory_metadata_ops:
       if metadata_map:
