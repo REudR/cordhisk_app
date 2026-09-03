@@ -24,7 +24,7 @@ class CHOPanel:
         load_list(
             self.listbox,
             self.chos,
-            lambda c: f"{c.custom_id} - {c.title}"
+            lambda c: f"{c.custom_id} ({c.title})" if c.title else c.custom_id
         )
 
     def add(self):
@@ -49,7 +49,7 @@ class CHOPanel:
         
         sel = self.listbox.get(selection[0])
 
-        cid = sel.split(" - ")[0]
+        cid = sel.split(" (", 1)[0]
         obj = session.query(CHO).filter_by(custom_id=cid).first()
 
         if obj and messagebox.askyesno("Delete", f"Delete CHO '{cid}'?"):
@@ -70,7 +70,7 @@ class CHOPanel:
     
         sel = self.listbox.get(selection[0])
     
-        cid = sel.split(" - ")[0]
+        cid = sel.split(" (", 1)[0]
     
         self.state.highlighted_cho = cid
         self.state.highlighted_memories = compute_links_for_cho(cid)
@@ -91,7 +91,7 @@ class CHOPanel:
         self.listbox.delete(0, tk.END)
     
         for c in session.query(CHO):
-            label = f"{c.custom_id} - {c.title}"
+            label = f"{c.custom_id} ({c.title})" if c.title else c.custom_id
     
             if c.custom_id == getattr(self.state, "highlighted_cho", None):
                 label = "★ " + label

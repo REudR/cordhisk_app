@@ -160,7 +160,7 @@ class MetadataPanel:
     
         cho_box = ttk.Combobox(
             dialog,
-            values=[f"{c.custom_id} - {c.title}" for c in session.query(CHO)]
+            values=[f"{c.custom_id} ({c.title})" if c.title else c.custom_id for c in session.query(CHO)]
         )
         cho_box.pack()
     
@@ -199,7 +199,7 @@ class MetadataPanel:
                 return
     
             cho_raw = cho_box.get()
-            cho = cho_raw.split(" - ")[0] if " - " in cho_raw else cho_raw
+            cho = cho_raw.split(" (", 1)[0]
             if not cho:
                 messagebox.showerror("Error", "Select a CHO")
                 return

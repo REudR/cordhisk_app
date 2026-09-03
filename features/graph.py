@@ -85,7 +85,7 @@ def build_labels(G, node_types, node_data, node_counts, cho_cache):
         elif t == "cho":
             cid = d
             title = cho_cache.get(cid, str(cid))
-            labels[node] = f"{cid}\n{wrap_text(title)}"
+            labels[node] = f"{cid} ({wrap_text(title)})"
 
         else:
             field = d.get("field", "").split(":")[-1]

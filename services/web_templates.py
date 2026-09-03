@@ -28,7 +28,7 @@ HTML_TEMPLATE = """
       .pill.cho { background: #d8f1e6; color: #0f6f55; border-color: #9ad7c2; }
       .pill.add { background: #0072b2; color: white; border-color: #005b8f; cursor: pointer; font-weight: 700; min-width: 28px; justify-content: center; }
       .pill.selected { box-shadow: 0 0 0 2px #0f172a inset; }
-      .text-view { font-family: inherit; font-size: 14px; line-height: 1.7; white-space: normal; }
+      .text-view { font-family: inherit; font-size: 14px; line-height: 1.7; white-space: pre-line; }
       .text-view p { margin: 0 0 10px; }
       form input, form select, form textarea { width: 100%; margin-bottom: 10px; padding: 8px; box-sizing: border-box; }
       form textarea { min-height: 140px; }
@@ -323,9 +323,9 @@ HTML_TEMPLATE = """
                   </div>
                   <div class="tag-list cho-tags-list" id="cho-tags-list">
                     {% for md in cho_metadata_items %}
-                    <label class="tag-selector cho-tag-item" data-cho-id="{{ md.cho }}">
+                    <label class="tag-selector cho-tag-item" data-cho-id="{{ md.cho }}" data-cho-label="{{ md.label }}">
                       <input type="checkbox" name="delete_cho_metadata[{{ md.index }}]" value="1">
-                      <span class="pill cho">{{ md.cho }} / {{ md.field }}: {{ md.value }}</span>
+                      <span class="pill cho cho-tag-link" data-cho-tag-index="{{ md.index }}">{{ md.label }} / {{ md.field }}: {{ md.value }}</span>
                     </label>
                     {% else %}
                     <span class="pill cho">No CHO metadata</span>
@@ -384,7 +384,7 @@ HTML_TEMPLATE = """
                     <label>CHO</label>
                     <select name="annotation_cho">
                       {% for cho in chos %}
-                      <option value="{{ cho.custom_id or cho.id }}">{{ cho.title or cho.custom_id or cho.id }}</option>
+                      <option value="{{ cho.custom_id or cho.id }}">{{ cho.custom_id or cho.id }}{% if cho.title %} ({{ cho.title }}){% endif %}</option>
                       {% endfor %}
                     </select>
                   </div>
@@ -403,15 +403,7 @@ HTML_TEMPLATE = """
                 </div>
                 <div id="annotation-source" class="text-view memory-text-scroll" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; user-select: text;">
                   {% for paragraph in paragraphs %}
-                  <p>
-                    {% for part in paragraph %}
-                      {% if part.type == 'text' %}
-                        {{ part.value }}
-                      {% else %}
-                        <span class="highlight {{ part.kind }}" title="{{ part.field }}">{{ part.value }}</span>
-                      {% endif %}
-                    {% endfor %}
-                  </p>
+                  <p>{% for part in paragraph %}{% if part.type == 'text' %}{{ part.value }}{% else %}<span class="highlight {{ part.kind }}" title="{{ part.field }}"{% if part.cho_tag_index is not none %} data-cho-tag-index="{{ part.cho_tag_index }}"{% endif %}>{{ part.value }}</span>{% endif %}{% endfor %}</p>
                   {% endfor %}
                 </div>
                 <input id="selected-annotation-text" name="selected_annotation_text" type="hidden">
@@ -594,6 +586,16 @@ HTML_TEMPLATE = """
           source.addEventListener('scroll', saveTextScrollState, { passive: true });
         }
 
+        document.querySelectorAll('.cho-tag-link[data-cho-tag-index]').forEach(function (tag) {
+          tag.addEventListener('click', function () {
+            const tagIndex = tag.getAttribute('data-cho-tag-index');
+            const targetSpan = source && source.querySelector('.highlight.cho[data-cho-tag-index="' + tagIndex + '"]');
+            if (targetSpan) {
+              targetSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          });
+        });
+
         window.addEventListener('beforeunload', saveTextScrollState);
 
         if (memoryAnnotationForm) {
@@ -627,6 +629,22 @@ HTML_TEMPLATE = """
             }
           };
           input.addEventListener('change', syncSelectedState);
+          input.addEventListener('change', function () {
+            if (!input.checked) {
+              return;
+            }
+            document.querySelectorAll('.tag-selector input').forEach(function (otherInput) {
+              if (otherInput === input) {
+                return;
+              }
+              otherInput.checked = false;
+              const otherLabel = otherInput.closest('.tag-selector');
+              const otherPill = otherLabel ? otherLabel.querySelector('.pill') : null;
+              if (otherPill) {
+                otherPill.classList.remove('selected');
+              }
+            });
+          });
           syncSelectedState();
         });
 
@@ -720,7 +738,10 @@ HTML_TEMPLATE = """
           choValues.forEach(function (value) {
             const option = document.createElement('option');
             option.value = value;
-            option.textContent = value;
+            const item = choTagItems.find(function (tagItem) {
+              return tagItem.getAttribute('data-cho-id') === value;
+            });
+            option.textContent = item ? (item.getAttribute('data-cho-label') || value) : value;
             choTagFilter.appendChild(option);
           });
 
@@ -830,8 +851,6 @@ HTML_TEMPLATE = """
           const nodeCircleById = new Map(allNodeCircles.map((node) => [node.getAttribute('data-node-id') || '', node]));
           const nodeLabelById = new Map(allNodeLabels.map((node) => [node.getAttribute('data-node-id') || '', node]));
           const originalYById = new Map(allNodeCircles.map((node) => [node.getAttribute('data-node-id') || '', parseFloat(node.getAttribute('cy') || '0')]));
-          const collapsedByMemory = new Set();
-          const collapsedByCho = new Set();
           const setHoverValue = (text) => {
             if (hoverValueBox) {
               hoverValueBox.textContent = text || 'No metadata details available.';
@@ -888,20 +907,6 @@ HTML_TEMPLATE = """
             });
             updateEdges();
           };
-          const applyCollapsedState = () => {
-            const allMetadata = metadataNodes.concat(metadataLabels);
-            allMetadata.forEach((item) => {
-              const ownerMemoryId = item.getAttribute('data-memory-owner-id') || '';
-              const ownerMemoryIds = ownerMemoryId.split(',').map((value) => value.trim()).filter(Boolean);
-              const ownerChoId = item.getAttribute('data-parent-id') || '';
-              const collapsed = isChoView
-                ? (ownerMemoryIds.length > 0 && ownerMemoryIds.every((id) => collapsedByMemory.has(id)))
-                : collapsedByCho.has(ownerChoId);
-              item.classList.toggle('metadata-collapsed', collapsed);
-            });
-            compactLayout();
-          };
-
           const initiallyVisibleMetadataNode = metadataNodes.find((node) => node.classList.contains('metadata-visible'));
           if (initiallyVisibleMetadataNode) {
             setHoverValue(initiallyVisibleMetadataNode.getAttribute('data-details'));
@@ -914,29 +919,6 @@ HTML_TEMPLATE = """
             });
             node.addEventListener('click', function (event) {
               const nodeType = node.getAttribute('data-node-type');
-              const nodeId = node.getAttribute('data-node-id') || '';
-              if (isChoView && nodeType === 'memory') {
-                event.preventDefault();
-                if (collapsedByMemory.has(nodeId)) {
-                  collapsedByMemory.delete(nodeId);
-                } else {
-                  collapsedByMemory.add(nodeId);
-                }
-                applyCollapsedState();
-                setHoverValue(node.getAttribute('data-details'));
-                return;
-              }
-              if (!isChoView && nodeType === 'cho') {
-                event.preventDefault();
-                if (collapsedByCho.has(nodeId)) {
-                  collapsedByCho.delete(nodeId);
-                } else {
-                  collapsedByCho.add(nodeId);
-                }
-                applyCollapsedState();
-                setHoverValue(node.getAttribute('data-details'));
-                return;
-              }
               if (nodeType === 'cho' || nodeType === 'memory') {
                 setHoverValue(node.getAttribute('data-details'));
               }
@@ -953,7 +935,7 @@ HTML_TEMPLATE = """
             });
           });
 
-          applyCollapsedState();
+          compactLayout();
         }
       });
     </script>

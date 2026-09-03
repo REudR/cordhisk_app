@@ -3,6 +3,7 @@ import os
 import re
 import unittest
 import tempfile
+import uuid
 
 from db import CHO, Memory, session
 from web_app import create_app
@@ -34,6 +35,53 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'CC BY-SA 3.0 IGO', response.data)
         self.assertIn(b'CC BY-NC-ND', response.data)
+
+    def test_sidebar_memory_and_cho_records_are_sorted_by_id(self):
+        suffix = uuid.uuid4().hex
+        memory_a = Memory(custom_id=f'alpha-{suffix}', title='Alpha', text='', file_path='demo.txt')
+        memory_z = Memory(custom_id=f'zulu-{suffix}', title='Zulu', text='', file_path='demo.txt')
+        cho_a = CHO(custom_id=f'alpha-cho-{suffix}', title='Alpha CHO')
+        cho_z = CHO(custom_id=f'zulu-cho-{suffix}', title='Zulu CHO')
+        session.add_all([memory_z, memory_a, cho_z, cho_a])
+        session.commit()
+
+        try:
+            response = self.client.get('/')
+            self.assertEqual(response.status_code, 200)
+            page = response.data.decode()
+            self.assertLess(page.index(memory_a.custom_id), page.index(memory_z.custom_id))
+            self.assertLess(page.index(cho_a.custom_id), page.index(cho_z.custom_id))
+        finally:
+            session.delete(memory_a)
+            session.delete(memory_z)
+            session.delete(cho_a)
+            session.delete(cho_z)
+            session.commit()
+
+    def test_graph_memory_and_cho_nodes_keep_navigation_links(self):
+        suffix = uuid.uuid4().hex
+        cho = CHO(custom_id=f'cho-nav-{suffix}', title='Navigable CHO')
+        memory = Memory(
+            custom_id=f'memory-nav-{suffix}',
+            title='Navigable memory',
+            text=f'A <dc:title cho="{cho.custom_id}">linked</dc:title> record',
+            file_path='demo.txt',
+        )
+        session.add_all([cho, memory])
+        session.commit()
+
+        try:
+            response = self.client.get(f'/?memory_id={memory.id}')
+            self.assertEqual(response.status_code, 200)
+            page = response.data.decode()
+            self.assertIn(f'<a href="/?memory_id={memory.id}">', page)
+            self.assertIn(f'<a href="/?memory_id={memory.id}&focus_cho={cho.custom_id}">', page)
+            self.assertNotIn('collapsedByMemory', page)
+            self.assertNotIn('collapsedByCho', page)
+        finally:
+            session.delete(memory)
+            session.delete(cho)
+            session.commit()
 
     def test_edit_memory_updates_database(self):
         memory = Memory(
@@ -70,6 +118,84 @@ class WebAppTests(unittest.TestCase):
             if file_path and os.path.exists(file_path):
                 os.remove(file_path)
 
+    def test_memory_display_preserves_single_line_breaks(self):
+        memory = Memory(
+            custom_id=f'test-single-lines-{uuid.uuid4().hex}',
+            title='Single line breaks',
+            text='First line\nSecond line\nThird line',
+            file_path='demo.txt',
+        )
+        session.add(memory)
+        session.commit()
+
+        try:
+            response = self.client.get(f'/?memory_id={memory.id}')
+            self.assertEqual(response.status_code, 200)
+            page = response.data.decode()
+            self.assertIn('white-space: pre-line', page)
+            self.assertIn('<p>First line\nSecond line\nThird line</p>', page)
+        finally:
+            session.delete(memory)
+            session.commit()
+
+    def test_memory_display_preserves_line_break_after_tagged_text(self):
+        cho = CHO(custom_id=f'cho-line-break-{uuid.uuid4().hex}', title='Line break CHO')
+        memory = Memory(
+            custom_id=f'test-tagged-line-{uuid.uuid4().hex}',
+            title='Tagged line break',
+            text=f'<dc:subject cho="{cho.custom_id}">First line</dc:subject>\nSecond line',
+            file_path='demo.txt',
+        )
+        session.add_all([cho, memory])
+        session.commit()
+
+        try:
+            response = self.client.get(f'/?memory_id={memory.id}')
+            self.assertEqual(response.status_code, 200)
+            page = response.data.decode()
+            self.assertIn('</span>\nSecond line</p>', page)
+        finally:
+            session.delete(memory)
+            session.delete(cho)
+            session.commit()
+
+    def test_cho_tag_click_targets_its_memory_highlight(self):
+        cho = CHO(custom_id=f'cho-scroll-{uuid.uuid4().hex}', title='Scroll CHO')
+        memory = Memory(
+            custom_id=f'test-cho-scroll-{uuid.uuid4().hex}',
+            title='CHO tag scroll',
+            text=(
+                f'Before <dc:subject cho="{cho.custom_id}">first tagged text</dc:subject> after\n\n'
+                f'Before <dc:subject cho="{cho.custom_id}">second tagged text</dc:subject> after'
+            ),
+            file_path='demo.txt',
+        )
+        session.add_all([cho, memory])
+        session.commit()
+
+        try:
+            response = self.client.get(f'/?memory_id={memory.id}')
+            self.assertEqual(response.status_code, 200)
+            page = response.data.decode()
+            self.assertIn('class="pill cho cho-tag-link" data-cho-tag-index="0"', page)
+            self.assertIn('class="pill cho cho-tag-link" data-cho-tag-index="1"', page)
+            self.assertIn('class="highlight cho" title="dc:subject" data-cho-tag-index="0"', page)
+            self.assertIn('class="highlight cho" title="dc:subject" data-cho-tag-index="1"', page)
+            self.assertIn("tag.addEventListener('click', function ()", page)
+            self.assertNotRegex(page, r"cho-tag-link.*?event\.preventDefault\(\)")
+            self.assertIn("targetSpan.scrollIntoView({ behavior: 'smooth', block: 'center' })", page)
+        finally:
+            session.delete(memory)
+            session.delete(cho)
+            session.commit()
+
+    def test_tag_selection_is_exclusive(self):
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        page = response.data.decode()
+        self.assertIn("document.querySelectorAll('.tag-selector input').forEach(function (otherInput)", page)
+        self.assertIn('otherInput.checked = false;', page)
+
     def test_graph_page_loads(self):
         response = self.client.get('/graph')
         self.assertEqual(response.status_code, 200)
@@ -105,6 +231,31 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'graph-node', response.data.lower())
         self.assertIn(b'metadata-hidden', response.data.lower())
+
+    def test_cho_id_and_name_are_shown_in_tag_controls_and_graph(self):
+        cho_id = f'CHO-LABEL-{uuid.uuid4().hex}'
+        cho = CHO(custom_id=cho_id, title='Penico')
+        memory = Memory(
+            custom_id=f'test-cho-labels-{uuid.uuid4().hex}',
+            title='CHO labels',
+            text=f'A <dc:title cho="{cho_id}">penico</dc:title> record',
+            file_path='demo.txt',
+        )
+        session.add_all([cho, memory])
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.get(f'/?memory_id={memory.id}')
+            self.assertEqual(response.status_code, 200)
+            expected_label = f'{cho_id} (Penico)'.encode()
+            self.assertIn(f'<option value="{cho_id}">'.encode() + expected_label + b'</option>', response.data)
+            self.assertIn(b'data-cho-label="' + expected_label + b'"', response.data)
+            self.assertIn(b'>' + expected_label + b'</text>', response.data)
+        finally:
+            session.delete(memory)
+            session.delete(cho)
+            session.commit()
 
     def test_graph_memory_node_uses_custom_id_in_details(self):
         memory = Memory(

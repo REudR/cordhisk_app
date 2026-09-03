@@ -6,6 +6,7 @@ import uuid
 import xml.etree.ElementTree as ET
 
 from flask import Flask, Response, redirect, render_template_string, request, url_for
+from sqlalchemy import func
 
 from config import APP_DATA_DIR
 from db import CHO, Memory, session
@@ -63,11 +64,11 @@ def _metadata_description(field_name):
 
 
 def _normalize_text(text):
-    text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n[ \t]*", "\n", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
+  text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+  text = re.sub(r"[ \t]+", " ", text)
+  text = re.sub(r"\n[ \t]*", "\n", text)
+  text = re.sub(r"\n{3,}", "\n\n", text)
+  return text
 
 def _extract_memory_block_metadata(text):
     from services.metadata import COMBINED_RE
@@ -190,6 +191,7 @@ def _build_paragraphs(text):
         start = match.end()
     paragraph_bounds.append((start, len(clean_text)))
 
+    cho_tag_index = 0
     for para_start, para_end in paragraph_bounds:
         para_text = clean_text[para_start:para_end].strip()
         if not para_text:
@@ -211,12 +213,16 @@ def _build_paragraphs(text):
                             parts.append({"type": "text", "value": normalized_segment})
                 highlighted_value = _normalize_text(clean_text[span_start:span_end])
                 if highlighted_value:
+                    is_cho_tag = span.get("type") == MetadataType.CHO.value
                     parts.append({
                         "type": "span",
                         "value": highlighted_value,
-                        "kind": "memory" if span.get("type") == MetadataType.MEMORY.value else "cho",
-                        "field": span.get("field", "")
+                        "kind": "cho" if is_cho_tag else "memory",
+                        "field": span.get("field", ""),
+                        "cho_tag_index": cho_tag_index if is_cho_tag else None,
                     })
+                    if is_cho_tag:
+                        cho_tag_index += 1
                 cursor = max(cursor, span_end)
         if cursor < para_end:
             tail = clean_text[cursor:para_end]
@@ -251,8 +257,9 @@ def _remove_nth_cho_tag(text, target_index):
 
 
 def _load_context(memory_id=None, focus_cho=None):
-    memories = session.query(Memory).order_by(Memory.id).all()
-    chos = session.query(CHO).order_by(CHO.id).all()
+    memories = session.query(Memory).order_by(func.lower(Memory.custom_id), Memory.id).all()
+    chos = session.query(CHO).order_by(func.lower(CHO.custom_id), CHO.id).all()
+    cho_lookup = _build_cho_lookup(chos)
 
     selected_memory = None
     metadata = []
@@ -276,7 +283,13 @@ def _load_context(memory_id=None, focus_cho=None):
           if md.get("type") == MetadataType.MEMORY.value and md.get("field") not in {"dc:identifier", MEMORY_LICENSE_FIELD}
         ]
         cho_metadata_items = [
-          {"index": index, "cho": md.get("cho"), "field": md["field"], "value": md["value"]}
+          {
+            "index": index,
+            "cho": md.get("cho"),
+            "label": _cho_display_label(cho_lookup.get(str(md.get("cho")))) or str(md.get("cho")),
+            "field": md["field"],
+            "value": md["value"],
+          }
           for index, md in enumerate(
             md for md in metadata
             if md.get("type") == MetadataType.CHO.value and md.get("cho")
@@ -315,6 +328,13 @@ def _build_cho_lookup(cho_rows):
     if cho.custom_id:
       lookup[str(cho.custom_id)] = cho
   return lookup
+
+
+def _cho_display_label(cho):
+  if cho is None:
+    return ""
+  cho_id = str(cho.custom_id or cho.id)
+  return f"{cho_id} ({cho.title})" if cho.title else cho_id
 
 
 def _build_graph_data(selected_memory_id=None, focus_cho=None):
@@ -433,16 +453,17 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
         cho_link = f"/?memory_id={selected_memory_id or ''}&focus_cho={cho.custom_id or cho.id}" if selected_memory_id is not None else f"/?focus_cho={cho.custom_id or cho.id}"
         field_name = md.get("field", "")
         display_field = _metadata_label(field_name)
+        cho_label = _cho_display_label(cho)
         cho_node = add_node(
           f"cho:{cho.custom_id or cho.id}",
-          cho.title or cho.custom_id or str(cho.id),
+          cho_label,
           "cho",
           760,
           cho_y,
           cho_link,
           36,
           "",
-          f"{cho.title or cho.custom_id or str(cho.id)}: {display_field} = {md.get('value', '')}",
+          f"{cho_label}: {display_field} = {md.get('value', '')}",
         )
         metadata_label = display_field
         position_key = (cho_key, field_name or "metadata", str(md.get("value", "")))
