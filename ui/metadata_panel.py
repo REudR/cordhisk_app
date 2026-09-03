@@ -4,7 +4,6 @@ from db import session, CHO
 from services.metadata_schema import METADATA_FIELDS
 from services.types import MetadataType
 from utils import (
-    MetadataType,
     get_all_fields_by_type,
     field_to_display,
     display_to_field
@@ -108,37 +107,6 @@ class MetadataPanel:
         self.editor.load(memory)
 
     # =========================
-    # ADD MEMORY META
-    # =========================
-    def open_add_memory_dialog(self):
-        try:
-            text = self.editor.text.get("sel.first", "sel.last")
-            start = int(self.editor.text.count("1.0", "sel.first")[0])
-        except:
-            messagebox.showerror("Error", "Select text first")
-            return
-
-        dialog = tk.Toplevel()
-
-        field_box = ttk.Combobox(dialog, values=METADATA_FIELDS["WebResource"]["fields"])
-        field_box.pack()
-
-        def submit():
-            self.state.spans.append({
-                "start": start,
-                "end": start + len(text),
-                "field": field_box.get(),
-                "value": text,
-                "type": MetadataType.MEMORY.value
-            })
-
-            self.rebuild_and_save()
-            self.refresh()
-            dialog.destroy()
-
-        tk.Button(dialog, text="Add", command=submit).pack()
-
-    # =========================
     # ADD CHO META
     # =========================
     def open_add_cho_dialog(self):
@@ -192,12 +160,6 @@ class MetadataPanel:
                 messagebox.showerror("Error", "Invalid field")
                 return
 
-            real_field = display_to_field(display, fields)
-    
-            if not real_field:
-                messagebox.showerror("Error", "Invalid field")
-                return
-    
             cho_raw = cho_box.get()
             cho = cho_raw.split(" (", 1)[0]
             if not cho:
@@ -307,52 +269,3 @@ class MetadataPanel:
 
         self.rebuild_and_save()
         self.refresh()
-
-    def show_cho_metadata_grouped(self, cho_id):
-        """Display CHO metadata grouped by memory"""
-    
-        from db import Memory
-        from services.metadata import extract_metadata
-    
-        # Clear existing data
-        self.cho_tree.delete(*self.cho_tree.get_children())
-        self.cho_row_map = {}
-    
-        # =========================
-        # Collect metadata per memory
-        # =========================
-        grouped = {}
-    
-        for mem in session.query(Memory):
-            md_list = extract_metadata(mem.text)
-    
-            for md in md_list:
-                if md.get("type") == MetadataType.CHO.value and md.get("cho") == cho_id:
-    
-                    if mem.custom_id not in grouped:
-                        grouped[mem.custom_id] = []
-    
-                    grouped[mem.custom_id].append(md)
-    
-        # =========================
-        # Populate TreeView
-        # =========================
-        for mem_id, items in grouped.items():
-    
-            # Parent node (memory)
-            parent = self.cho_tree.insert(
-                "",
-                "end",
-                values=(mem_id, "—", "—")
-            )
-    
-            # Child nodes (metadata)
-            for md in items:
-                item_id = self.cho_tree.insert(
-                    parent,
-                    "end",
-                    values=(md.get("cho"), md["field"], md["value"])
-                )
-    
-                # Optional: store reference if needed later
-                self.cho_row_map[item_id] = md

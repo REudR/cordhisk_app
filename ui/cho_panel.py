@@ -62,8 +62,6 @@ class CHOPanel:
     
     
     def _select(self):
-        from services.selection_service import compute_links_for_cho
-    
         selection = self.listbox.curselection()
         if not selection:
             return

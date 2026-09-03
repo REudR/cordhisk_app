@@ -5,9 +5,7 @@ import html
 
 from db import session, Memory
 from utils import load_list
-from services.types import MetadataType
 from services.file_service import copy_memory_file
-from services.metadata import extract_metadata, parse_text_and_spans
 from services.memory_service import rebuild_memory_text
 from ui.dialogs import ask_memory_full_form
 from services.selection_service import compute_links_for_memory

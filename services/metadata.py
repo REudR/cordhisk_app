@@ -1,5 +1,4 @@
 import re
-import xml.etree.ElementTree as ET
 from services.types import MetadataType
 
 
@@ -12,23 +11,6 @@ COMBINED_RE = re.compile(
     r'(?P<value>.*?)</\1>',
     re.DOTALL
 )
-
-
-# =========================
-# BUILD RDF BLOCK
-# =========================
-def build_rdf_block(metadata):
-    if not metadata:
-        return ""
-
-    root = ET.Element("rdf:RDF")
-    desc = ET.SubElement(root, "rdf:Description")
-
-    for field, value in metadata.items():
-        tag = field.replace(":", "_")
-        ET.SubElement(desc, tag).text = value
-
-    return ET.tostring(root, encoding="unicode") + "\n\n"
 
 
 # =========================

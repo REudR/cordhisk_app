@@ -441,7 +441,7 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
     )
 
     metadata_items = metadata_by_memory_id.get(memory.id, [])
-    for md_index, md in enumerate(metadata_items):
+    for md in metadata_items:
       if md.get("type") == MetadataType.MEMORY.value:
         continue  # skip memory metadata entirely
       elif md.get("type") == MetadataType.CHO.value and md.get("cho"):
@@ -971,7 +971,6 @@ def create_app(testing=False):
 
     deleted_memory_fields = set()
     deleted_cho_fields = set()
-    deleted_cho_indices = set()
     metadata_map = _memory_metadata_dict(updated_text)
     if identifier_changed:
       metadata_map["dc:identifier"] = new_custom_id
@@ -995,7 +994,6 @@ def create_app(testing=False):
             deleted_cho_fields.add((cho_id, field))
             updated_text = _remove_metadata_tag(updated_text, field, MetadataType.CHO.value, cho=cho_id)
           else:
-            deleted_cho_indices.add(remainder)
             updated_text = _remove_nth_cho_tag(updated_text, remainder)
       elif key == "delete_memory_metadata" and request.form.get(key):
         memory_metadata_ops = True

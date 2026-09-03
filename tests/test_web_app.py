@@ -2,7 +2,6 @@ import io
 import os
 import re
 import unittest
-import tempfile
 import uuid
 
 from db import CHO, Memory, session
@@ -240,9 +239,11 @@ class WebAppTests(unittest.TestCase):
             self.assertIn('class="pill cho cho-tag-link" data-cho-tag-index="1"', page)
             self.assertIn('class="highlight cho" title="dc:subject" data-cho-tag-index="0"', page)
             self.assertIn('class="highlight cho" title="dc:subject" data-cho-tag-index="1"', page)
-            self.assertIn("tag.addEventListener('click', function ()", page)
-            self.assertNotRegex(page, r"cho-tag-link.*?event\.preventDefault\(\)")
-            self.assertIn("targetSpan.scrollIntoView({ behavior: 'smooth', block: 'center' })", page)
+            self.assertIn("tag.addEventListener('click', function (event)", page)
+            self.assertIn("checkbox.dispatchEvent(new Event('change', { bubbles: true }))", page)
+            self.assertIn('source.scrollTo({', page)
+            self.assertIn("behavior: 'smooth'", page)
+            self.assertNotIn('targetSpan.scrollIntoView', page)
         finally:
             session.delete(memory)
             session.delete(cho)
@@ -258,7 +259,7 @@ class WebAppTests(unittest.TestCase):
     def test_graph_page_loads(self):
         response = self.client.get('/graph')
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b'CORDHISK 2.2', response.data)
+        self.assertIn(b'CORDHISK APP v2.3', response.data)
         self.assertIn(b'CHO records', response.data)
 
     def test_edit_cho_metadata_updates_memory_text(self):

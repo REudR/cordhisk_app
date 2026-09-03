@@ -177,8 +177,8 @@ HTML_TEMPLATE = """
   <body>
     <div class="shell">
       <aside class="sidebar">
-        <h2>CORDHISK 2.2</h2>
-        <p class="sidebar-subtitle">Metadata workspace for memories & cultural heritage objects (CHO).</p>
+        <h2>CORDHISK APP v2.3</h2>
+        <p class="sidebar-subtitle">Memories, metadata, and cultural heritage objects (CHO).</p>
         <button type="button" class="menu-toggle" id="toggle-menu">Menu</button>
         <div class="sidebar-menu hidden" id="sidebar-menu">
           <div class="sidebar-button-grid">
@@ -321,10 +321,10 @@ HTML_TEMPLATE = """
 
                 <div class="tag-section">
                   <div class="cho-tags-head">
-                    <button type="submit" name="remove_selected" value="1" onclick="return confirm('Remove selected metadata tags?');">Remove selected tags</button>
                     <h4>CHO tags in this memory</h4>
                   </div>
                   <div class="cho-filter-row">
+                    <button type="submit" name="remove_selected" value="1" onclick="return confirm('Remove selected metadata tags?');">-</button>
                     <label for="cho-tag-filter">Filter CHO</label>
                     <select id="cho-tag-filter" name="cho_tag_filter">
                       <option value="">All CHO</option>
@@ -597,11 +597,20 @@ HTML_TEMPLATE = """
         }
 
         document.querySelectorAll('.cho-tag-link[data-cho-tag-index]').forEach(function (tag) {
-          tag.addEventListener('click', function () {
+          tag.addEventListener('click', function (event) {
+            event.preventDefault();
+            const checkbox = tag.closest('.tag-selector').querySelector('input[type="checkbox"]');
+            checkbox.checked = !checkbox.checked;
+            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
             const tagIndex = tag.getAttribute('data-cho-tag-index');
             const targetSpan = source && source.querySelector('.highlight.cho[data-cho-tag-index="' + tagIndex + '"]');
             if (targetSpan) {
-              targetSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              const sourceBounds = source.getBoundingClientRect();
+              const targetBounds = targetSpan.getBoundingClientRect();
+              source.scrollTo({
+                top: source.scrollTop + targetBounds.top - sourceBounds.top - (source.clientHeight - targetBounds.height) / 2,
+                behavior: 'smooth',
+              });
             }
           });
         });
@@ -767,7 +776,7 @@ HTML_TEMPLATE = """
               }
             });
             if (choTagCount) {
-              choTagCount.textContent = visibleCount + ' shown / ' + choTagItems.length + ' total';
+              choTagCount.textContent = visibleCount + ' / ' + choTagItems.length;
             }
           };
 
