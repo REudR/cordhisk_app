@@ -266,6 +266,16 @@ HTML_TEMPLATE = """
                 <input type="hidden" id="inline-edit-field" name="edit_memory_metadata_field" value="">
                 <input type="hidden" id="inline-edit-value" name="edit_memory_metadata_value" value="">
 
+                <div class="inline-annotation-row">
+                  <div>
+                    <label for="memory-custom-id">Memory identifier</label>
+                    <input id="memory-custom-id" name="custom_id" value="{{ selected_memory.custom_id or selected_memory.id }}" required>
+                  </div>
+                  <div>
+                    <button type="submit" name="save_memory_identifier" value="1">Save identifier</button>
+                  </div>
+                </div>
+
                 <div class="tag-section">
                   <p class="tag-help">Double-click a memory tag to update its value. Use checkboxes and remove selected tags.</p>
                   <div class="tag-list">

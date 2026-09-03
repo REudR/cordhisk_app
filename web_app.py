@@ -946,6 +946,15 @@ def create_app(testing=False):
       return _redirect_with_notice("index", "error", "Memory not found.")
 
     focus_cho = request.form.get("focus_cho", "").strip()
+    new_custom_id = request.form.get("custom_id", memory.custom_id or "").strip()
+    if not new_custom_id:
+      return _redirect_with_notice("index", "error", "Memory identifier is required.", memory_id=memory_id)
+    existing_memory = session.query(Memory).filter(Memory.custom_id == new_custom_id).first()
+    if existing_memory is not None and existing_memory.id != memory.id:
+      return _redirect_with_notice("index", "error", f"Memory ID '{new_custom_id}' already exists.", memory_id=memory_id)
+
+    identifier_changed = new_custom_id != (memory.custom_id or "")
+    previous_file_path = memory.file_path
     if "title" in request.form:
       memory.title = request.form.get("title", "").strip() or (memory.title or f"Memory {memory.id}")
 
@@ -964,6 +973,8 @@ def create_app(testing=False):
     deleted_cho_fields = set()
     deleted_cho_indices = set()
     metadata_map = _memory_metadata_dict(updated_text)
+    if identifier_changed:
+      metadata_map["dc:identifier"] = new_custom_id
     if memory_license_value:
       metadata_map[MEMORY_LICENSE_FIELD] = memory_license_value
     else:
@@ -1023,13 +1034,20 @@ def create_app(testing=False):
     if MEMORY_LICENSE_FIELD in deleted_memory_fields:
       memory_license_value = ""
 
-    if memory_metadata_ops:
+    if memory_metadata_ops or identifier_changed:
       if metadata_map:
-        updated_text = rebuild_memory_text(updated_text, metadata_map, memory.custom_id or memory.id)
+        updated_text = rebuild_memory_text(updated_text, metadata_map, new_custom_id)
       else:
         updated_text = _strip_memory_metadata_block(updated_text).strip()
 
+    memory.custom_id = new_custom_id
     _persist_memory_to_disk(memory, updated_text)
+    if identifier_changed and previous_file_path and previous_file_path != memory.file_path:
+      try:
+        if os.path.dirname(os.path.abspath(previous_file_path)) == os.path.abspath(APP_DATA_DIR):
+          os.remove(previous_file_path)
+      except OSError:
+        pass
     memory.license = memory_license_value or None
     if "title" not in request.form:
       memory.title = get_memory_title(memory.text or "", memory.title or f"Memory {memory.id}")
@@ -1038,7 +1056,8 @@ def create_app(testing=False):
     redirect_kwargs = {"memory_id": memory_id}
     if focus_cho:
       redirect_kwargs["focus_cho"] = focus_cho
-    return _redirect_with_notice("index", "success", "Memory metadata saved.", **redirect_kwargs)
+    message = "Memory identifier saved." if identifier_changed else "Memory metadata saved."
+    return _redirect_with_notice("index", "success", message, **redirect_kwargs)
 
   @app.route("/memories/<int:memory_id>/annotate", methods=["POST"])
   def annotate_memory(memory_id):

@@ -118,6 +118,65 @@ class WebAppTests(unittest.TestCase):
             if file_path and os.path.exists(file_path):
                 os.remove(file_path)
 
+    def test_edit_memory_identifier_updates_metadata_and_file(self):
+        old_id = f'test-memory-id-old-{uuid.uuid4().hex}'
+        new_id = f'test-memory-id-new-{uuid.uuid4().hex}'
+        memory = Memory(
+            custom_id=old_id,
+            title='Identifier test',
+            text=f'=== MEMORY METADATA START ===\n<dc:identifier type="memory">{old_id}</dc:identifier>\n=== MEMORY METADATA END ===\n\nBody',
+            file_path='',
+        )
+        session.add(memory)
+        session.commit()
+        _persisted_path = os.path.join(os.path.dirname(__file__), '..', 'memory_files', f'{old_id}.txt')
+        memory.file_path = os.path.abspath(_persisted_path)
+        with open(memory.file_path, 'w', encoding='utf-8') as handle:
+            handle.write(memory.text)
+        session.commit()
+
+        try:
+            response = self.client.post(
+                f'/memories/{memory.id}/edit',
+                data={'custom_id': new_id},
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            updated = session.get(Memory, memory.id)
+            self.assertEqual(updated.custom_id, new_id)
+            self.assertIn(f'<dc:identifier type="memory">{new_id}</dc:identifier>', updated.text)
+            self.assertTrue(updated.file_path.endswith(f'{new_id}.txt'))
+            self.assertTrue(os.path.exists(updated.file_path))
+            self.assertFalse(os.path.exists(os.path.abspath(_persisted_path)))
+        finally:
+            updated = session.get(Memory, memory.id)
+            file_path = updated.file_path if updated is not None else None
+            session.delete(memory)
+            session.commit()
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+
+    def test_edit_memory_identifier_rejects_duplicate(self):
+        suffix = uuid.uuid4().hex
+        existing = Memory(custom_id=f'existing-memory-{suffix}', title='Existing', text='', file_path='demo.txt')
+        memory = Memory(custom_id=f'editable-memory-{suffix}', title='Editable', text='Body', file_path='demo.txt')
+        session.add_all([existing, memory])
+        session.commit()
+
+        try:
+            response = self.client.post(
+                f'/memories/{memory.id}/edit',
+                data={'custom_id': existing.custom_id},
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'already exists', response.data)
+            self.assertEqual(session.get(Memory, memory.id).custom_id, memory.custom_id)
+        finally:
+            session.delete(memory)
+            session.delete(existing)
+            session.commit()
+
     def test_memory_display_preserves_single_line_breaks(self):
         memory = Memory(
             custom_id=f'test-single-lines-{uuid.uuid4().hex}',
