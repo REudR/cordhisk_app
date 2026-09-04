@@ -554,6 +554,12 @@ class WebAppTests(unittest.TestCase):
         try:
             response = self.client.get('/compare?cho_id=CHO-COMPARE')
             self.assertEqual(response.status_code, 200)
+            self.assertIn(b'Compare CHO (CHO-COMPARE)', response.data)
+            self.assertIn(b'href="/?focus_cho=CHO-COMPARE">CHO-COMPARE</a>', response.data)
+            self.assertIn(
+                f'href="/?memory_id={memory.id}&filter_cho=CHO-COMPARE"'.encode(),
+                response.data,
+            )
             self.assertIn(b'test-compare-memory', response.data)
             self.assertIn(b'linked value', response.data)
         finally:
@@ -577,6 +583,73 @@ class WebAppTests(unittest.TestCase):
             response = self.client.get('/compare?cho_id=CHO-COMPARE-DESC')
             self.assertEqual(response.status_code, 200)
             self.assertIn(b'title="The name given to the resource."', response.data)
+        finally:
+            session.delete(memory)
+            session.delete(cho)
+            session.commit()
+
+    def test_compare_report_groups_values_and_links_memories(self):
+        cho = CHO(custom_id='CHO-COMPARE-REPORT', title='Report CHO')
+        memory_one = Memory(
+            custom_id='test-report-memory-one',
+            title='Report memory one',
+            text='<dc:title cho="CHO-COMPARE-REPORT">Repeated title</dc:title>',
+            file_path='demo.txt'
+        )
+        memory_two = Memory(
+            custom_id='test-report-memory-two',
+            title='Report memory two',
+            text='<dc:title cho="CHO-COMPARE-REPORT">Repeated title</dc:title> <dc:title cho="CHO-COMPARE-REPORT">Other title</dc:title>',
+            file_path='demo.txt'
+        )
+        session.add_all([cho, memory_one, memory_two])
+        session.commit()
+
+        try:
+            response = self.client.get('/compare?cho_id=CHO-COMPARE-REPORT&view=report')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'<th class="report-count">N</th>', response.data)
+            self.assertIn(b'<th class="report-instance">Instance</th>', response.data)
+            self.assertIn(b'<th class="report-memories">Related memories</th>', response.data)
+            self.assertIn(b'Repeated title', response.data)
+            self.assertIn(b'>2</td>', response.data)
+            self.assertIn(b'test-report-memory-one', response.data)
+            self.assertIn(b'test-report-memory-two', response.data)
+            self.assertIn(
+                f'href="/?memory_id={memory_one.id}&filter_cho=CHO-COMPARE-REPORT"'.encode(),
+                response.data,
+            )
+            self.assertNotIn(
+                f'href="/?memory_id={memory_one.id}&focus_cho=CHO-COMPARE-REPORT"'.encode(),
+                response.data,
+            )
+            main_response = self.client.get(
+                f'/?memory_id={memory_one.id}&filter_cho=CHO-COMPARE-REPORT'
+            )
+            self.assertIn(b'const initialChoTagFilter = "CHO-COMPARE-REPORT";', main_response.data)
+        finally:
+            session.delete(memory_one)
+            session.delete(memory_two)
+            session.delete(cho)
+            session.commit()
+
+    def test_compare_report_csv_download(self):
+        cho = CHO(custom_id='CHO-COMPARE-CSV', title='CSV CHO')
+        memory = Memory(
+            custom_id='test-report-csv-memory',
+            title='CSV memory',
+            text='<dc:title cho="CHO-COMPARE-CSV">CSV title</dc:title>',
+            file_path='demo.txt'
+        )
+        session.add_all([cho, memory])
+        session.commit()
+
+        try:
+            response = self.client.get('/compare/report.csv?cho_id=CHO-COMPARE-CSV')
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.mimetype, 'text/csv')
+            self.assertIn(b'Metadata field,Metadata instance,Number of instances,Related memories', response.data)
+            self.assertIn(b'dc:title,CSV title,1,test-report-csv-memory', response.data)
         finally:
             session.delete(memory)
             session.delete(cho)

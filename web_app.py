@@ -1,4 +1,6 @@
 import html
+import csv
+import io
 import os
 import re
 import tempfile
@@ -1233,12 +1235,17 @@ def create_app(testing=False):
   def compare_cho():
     chos = session.query(CHO).order_by(CHO.id).all()
     selected_cho = request.args.get("cho_id", "").strip()
+    view = request.args.get("view", "compare").strip().lower()
+    if view not in {"compare", "report"}:
+      view = "compare"
     memory_columns = []
     matrix_rows = []
+    report_sections = []
     metadata_by_memory_id = _build_metadata_cache(session.query(Memory).order_by(Memory.id).all())
 
     if selected_cho:
       field_memory_values = {}
+      report_values = {}
       for memory in session.query(Memory).order_by(Memory.id):
         memory_label = f"{memory.custom_id or memory.id} - {memory.title or ('Memory ' + str(memory.id))}"
         memory_columns.append({"id": memory.id, "label": memory_label})
@@ -1251,6 +1258,12 @@ def create_app(testing=False):
             memory_map = field_memory_values.setdefault(field, {})
             existing = memory_map.get(memory.id, "")
             memory_map[memory.id] = f"{existing}; {value}" if existing else value
+            report_row = report_values.setdefault(field, {}).setdefault(value, {
+              "count": 0,
+              "memories": {},
+            })
+            report_row["count"] += 1
+            report_row["memories"][memory.id] = memory.custom_id or str(memory.id)
 
       matrix_rows = [
         {"field": field, "values": values}
@@ -1266,14 +1279,67 @@ def create_app(testing=False):
         }
         memory_columns = [col for col in memory_columns if col["id"] in used_memory_ids]
 
+      report_sections = [
+        {
+          "field": field,
+          "rows": [
+            {
+              "value": value,
+              "count": report_row["count"],
+              "memories": [
+                {"id": memory_id, "label": label}
+                for memory_id, label in report_row["memories"].items()
+              ],
+            }
+            for value, report_row in sorted(
+              values.items(), key=lambda item: (-item[1]["count"], item[0].casefold())
+            )
+          ],
+        }
+        for field, values in sorted(report_values.items())
+      ]
+
     return render_template_string(
       COMPARE_TEMPLATE,
       chos=chos,
       selected_cho=selected_cho,
+      view=view,
       memory_columns=memory_columns,
       matrix_rows=matrix_rows,
+      report_sections=report_sections,
       field_descriptions={row["field"]: _metadata_description(row["field"]) for row in matrix_rows},
     )
+
+  @app.route("/compare/report.csv")
+  def export_compare_report_csv():
+    selected_cho = request.args.get("cho_id", "").strip()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(("Metadata field", "Metadata instance", "Number of instances", "Related memories"))
+
+    if selected_cho:
+      report_values = {}
+      for memory in session.query(Memory).order_by(Memory.id):
+        memory_label = memory.custom_id or str(memory.id)
+        for md in extract_metadata(memory.text or ""):
+          if md.get("type") != MetadataType.CHO.value or str(md.get("cho")) != selected_cho:
+            continue
+          field = md.get("field", "")
+          if field:
+            report_row = report_values.setdefault(field, {}).setdefault(md.get("value", ""), {
+              "count": 0,
+              "memories": {},
+            })
+            report_row["count"] += 1
+            report_row["memories"][memory.id] = memory_label
+
+      for field, values in sorted(report_values.items()):
+        for value, report_row in sorted(values.items(), key=lambda item: (-item[1]["count"], item[0].casefold())):
+          writer.writerow((field, value, report_row["count"], "; ".join(report_row["memories"].values())))
+
+    response = Response(output.getvalue(), mimetype="text/csv")
+    response.headers["Content-Disposition"] = f'attachment; filename="cho_{selected_cho or "report"}_report.csv"'
+    return response
 
   @app.route("/export/memory/<int:memory_id>.rdf")
   def export_memory_rdf(memory_id):

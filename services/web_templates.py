@@ -494,6 +494,7 @@ HTML_TEMPLATE = """
         const choTagCount = document.getElementById('cho-tag-count');
         const choTagItems = Array.from(document.querySelectorAll('.cho-tag-item'));
         const choTagsList = document.getElementById('cho-tags-list');
+        const initialChoTagFilter = {{ filter_cho | tojson }};
         const scrollStateKey = 'cordhisk:scroll:{{ selected_memory.id if selected_memory else "none" }}';
         let zoomLevel = 1;
         let panX = 0;
@@ -781,6 +782,7 @@ HTML_TEMPLATE = """
           };
 
           choTagFilter.addEventListener('change', applyChoTagFilter);
+          choTagFilter.value = initialChoTagFilter;
           applyChoTagFilter();
         } else if (choTagFilter && choTagsList && choTagsList.textContent && choTagsList.textContent.includes('No CHO metadata')) {
           choTagFilter.disabled = true;
@@ -1053,6 +1055,16 @@ COMPARE_TEMPLATE = """
       .back-btn { display: inline-block; padding: 8px 12px; border-radius: 6px; background: #1d4ed8; color: white; }
       .field-name { border-bottom: 1px dotted #94a3b8; cursor: help; }
       .field-help { margin-left: 6px; color: #64748b; font-size: 12px; cursor: help; }
+      .view-toggle { display: flex; gap: 12px; margin-bottom: 12px; }
+      .view-toggle label { display: flex; align-items: center; gap: 4px; }
+      .report-section { margin-top: 24px; }
+      .report-section h3 { margin-bottom: 8px; }
+      .report-table { table-layout: fixed; }
+      .report-count { width: 5%; }
+      .report-instance { width: 65%; }
+      .report-memories { width: 30%; }
+      .memory-links a + a::before { content: ", "; color: #64748b; }
+      .download-btn { display: inline-block; margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; background: #047857; color: white; }
     </style>
   </head>
   <body>
@@ -1068,22 +1080,48 @@ COMPARE_TEMPLATE = """
           <select name="cho_id">
             <option value="">Choose CHO</option>
             {% for cho in chos %}
-            <option value="{{ cho.custom_id or cho.id }}" {% if selected_cho == (cho.custom_id or cho.id|string) %}selected{% endif %}>{{ cho.title or cho.custom_id or cho.id }}</option>
+            <option value="{{ cho.custom_id or cho.id }}" {% if selected_cho == (cho.custom_id or cho.id|string) %}selected{% endif %}>{{ cho.title or cho.custom_id or cho.id }} ({{ cho.custom_id or cho.id }})</option>
             {% endfor %}
           </select>
-          <button type="submit">Compare</button>
+          <div class="view-toggle">
+            <label><input type="radio" name="view" value="compare" {% if view == 'compare' %}checked{% endif %}> Compare</label>
+            <label><input type="radio" name="view" value="report" {% if view == 'report' %}checked{% endif %}> Report</label>
+          </div>
+          <button type="submit">Show results</button>
         </form>
       </div>
       {% if selected_cho %}
       <div class="card">
-        <h2>Results for CHO {{ selected_cho }}</h2>
+        <h2>{% if view == 'report' %}Report{% else %}Comparison{% endif %} for CHO <a href="/?focus_cho={{ selected_cho }}">{{ selected_cho }}</a></h2>
+        {% if view == 'report' %}
+        <a class="download-btn" href="/compare/report.csv?cho_id={{ selected_cho }}">Download CSV</a>
+        {% for section in report_sections %}
+        <section class="report-section">
+          <h3><span class="field-name" title="{{ field_descriptions.get(section.field, section.field) }}">{{ section.field }}</span></h3>
+          <table class="report-table">
+            <thead><tr><th class="report-count">N</th><th class="report-instance">Instance</th><th class="report-memories">Related memories</th></tr></thead>
+            <tbody>
+              {% for row in section.rows %}
+              <tr>
+                <td class="report-count">{{ row.count }}</td>
+                <td class="report-instance">{{ row.value }}</td>
+                <td class="report-memories memory-links">{% for memory in row.memories %}<a href="/?memory_id={{ memory.id }}&filter_cho={{ selected_cho }}">{{ memory.label }}</a>{% endfor %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+        {% else %}
+        <p>No metadata found for this CHO.</p>
+        {% endfor %}
+        {% else %}
         <div class="matrix-wrap">
           <table class="matrix">
             <thead>
               <tr>
                 <th>Field</th>
                 {% for memory in memory_columns %}
-                <th><a href="/?memory_id={{ memory.id }}&focus_cho={{ selected_cho }}">{{ memory.label }}</a></th>
+                <th><a href="/?memory_id={{ memory.id }}&filter_cho={{ selected_cho }}">{{ memory.label }}</a></th>
                 {% endfor %}
               </tr>
             </thead>
@@ -1104,6 +1142,7 @@ COMPARE_TEMPLATE = """
             </tbody>
           </table>
         </div>
+        {% endif %}
       </div>
       {% endif %}
     </div>
