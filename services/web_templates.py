@@ -184,7 +184,7 @@ HTML_TEMPLATE = """
           <div class="sidebar-button-grid">
             <a class="side-btn" href="/memories/import">Import TXT memory</a>
             <a class="side-btn" href="/search">Search</a>
-            <a class="side-btn" href="/compare">Compare</a>
+            <a class="side-btn" href="/compare">Compare / Report</a>
             <button type="button" class="side-btn alt" id="open-add-cho">Add CHO</button>
             <button type="button" class="side-btn alt" id="open-export-cho">Download CHO RDF</button>
             {% if selected_memory %}

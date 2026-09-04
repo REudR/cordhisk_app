@@ -795,6 +795,7 @@ def create_app(testing=False):
   def index():
     memory_id = request.args.get("memory_id", type=int)
     focus_cho = request.args.get("focus_cho", "")
+    filter_cho = request.args.get("filter_cho", "").strip()
     notice_level = request.args.get("notice_level", "").strip() or "success"
     notice_message = request.args.get("notice_message", "").strip()
     memories, chos, selected_memory, metadata, paragraphs, memory_metadata_items, cho_metadata_items, _ = _load_context(memory_id, focus_cho)
@@ -815,6 +816,7 @@ def create_app(testing=False):
       nodes=nodes,
       edges=edges,
       focus_cho=focus_cho,
+      filter_cho=filter_cho,
       focus_memory=f"memory:{memory_id}" if memory_id else "",
       selected_cho_details=selected_cho_details,
       notice_level=notice_level,
@@ -1171,6 +1173,7 @@ def create_app(testing=False):
   def graph():
     memory_id = request.args.get("memory_id", type=int)
     focus_cho = request.args.get("focus_cho", "")
+    filter_cho = request.args.get("filter_cho", "").strip()
     memories, chos, selected_memory, metadata, paragraphs, memory_metadata_items, cho_metadata_items, _ = _load_context(memory_id, focus_cho)
     nodes, edges = _build_graph_data(memory_id, focus_cho)
     selected_cho_details = _build_selected_cho_details(focus_cho) if focus_cho else None
@@ -1189,6 +1192,7 @@ def create_app(testing=False):
       nodes=nodes,
       edges=edges,
       focus_cho=focus_cho,
+      filter_cho=filter_cho,
       focus_memory=f"memory:{memory_id}" if memory_id else "",
       selected_cho_details=selected_cho_details,
       notice_level=request.args.get("notice_level", "").strip() or "success",
