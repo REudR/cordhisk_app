@@ -5,7 +5,7 @@ import unittest
 import uuid
 
 from db import CHO, Memory, session
-from web_app import create_app
+from cordhisk import create_app
 
 
 class WebAppTests(unittest.TestCase):
