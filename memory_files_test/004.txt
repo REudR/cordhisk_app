@@ -1,7 +1,0 @@
-=== MEMORY METADATA START ===
-<dc:title type="memory">Mensajes</dc:title>
-<dc:date type="memory">07.07.1965</dc:date>
-<dc:creator type="memory">Isa</dc:creator>
-=== MEMORY METADATA END ===
-
-La <dc:type cho="WF76">bicicleta</dc:type> <dc:description cho="WF76">era azul</dc:description>

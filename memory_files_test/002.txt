@@ -1,8 +1,0 @@
-=== MEMORY METADATA START ===
-<dc:title type="memory">Mensajes</dc:title>
-<dc:creator type="memory">Fermin Rafael</dc:creator>
-<dc:date type="memory">07.07.1965</dc:date>
-<dc:subject type="memory">Entrevista</dc:subject>
-=== MEMORY METADATA END ===
-
-El <dc:title cho="PR75">reloj</dc:title> me lo regaló mi <dc:contributor cho="PR75">abuelo</dc:contributor> en mi cumpleaños el <dc:date cho="PR75">28 de enero de 2010</dc:date>. Es un <dc:description cho="PR75">reloj de manecillas con dos alarmas y esfera azul</dc:description>. María compró el libro <dc:title cho="RE88">Momo</dc:title> para su clase de literatura un <dc:date cho="RE88">15 de julio</dc:date>. Es una <dc:description cho="RE88">novela de 200 páginas con portada color naranja</dc:description>. <dc:contributor cho="WF76">Héctor</dc:contributor> tenía una <dc:title cho="WF76">bicicleta de carreras</dc:title> que compró en <dc:date cho="WF76">2020</dc:date>. Es <dc:description cho="WF76">roja con ruedas delgadas</dc:description>.
