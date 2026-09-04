@@ -423,7 +423,7 @@ HTML_TEMPLATE = """
             </div>
             <p class="project-footer-note">
               Developped by Rafael Ramirez Eudave at the Delft University of Technology (2026).<br>
-              The Community-driven Digitisation for Heritage at Risk (CORDHISK) project is funded by the European Union's Horizon Europe 2023 (Marie Sklodowska Curie grant agreement No 101149833).
+              The "Community-driven Digitisation for Heritage at Risk" (CORDHISK) project is funded by the European Union's Horizon Europe 2023 (Marie Sklodowska Curie grant agreement No 101149833).
             </p>
             {% endif %}
             {% if focus_cho %}
