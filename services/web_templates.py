@@ -177,7 +177,7 @@ HTML_TEMPLATE = """
   <body>
     <div class="shell">
       <aside class="sidebar">
-        <h2>CORDHISK APP v2.3</h2>
+        <h2>CORDHISK APP v2.4</h2>
         <p class="sidebar-subtitle">Memories, metadata, and cultural heritage objects (CHO).</p>
         <button type="button" class="menu-toggle" id="toggle-menu">Menu</button>
         <div class="sidebar-menu hidden" id="sidebar-menu">
