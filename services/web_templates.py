@@ -433,7 +433,7 @@ HTML_TEMPLATE = """
                 <p class="metadata-helper">Metadata grouped by memory for the selected CHO.</p>
                 {% for group in selected_cho_details.memories %}
                 <div class="cho-memory-group">
-                  <p><strong><a href="/?memory_id={{ group.memory_id }}&focus_cho={{ selected_cho_details.label }}">{{ group.memory_label }}</a></strong></p>
+                  <p><strong><a href="/?memory_id={{ group.memory_id }}&filter_cho={{ selected_cho_details.label }}">{{ group.memory_label }}</a></strong></p>
                   <div class="tag-list">
                     {% for tag in group.tags %}
                     <span class="pill cho">{{ tag.field }}: {{ tag.value }}</span>

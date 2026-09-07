@@ -82,6 +82,34 @@ class WebAppTests(unittest.TestCase):
             session.delete(cho)
             session.commit()
 
+    def test_cho_view_memory_links_open_memory_view_with_cho_filter(self):
+        suffix = uuid.uuid4().hex
+        cho = CHO(custom_id=f'cho-memory-link-{suffix}', title='Linked CHO')
+        memory = Memory(
+            custom_id=f'memory-cho-link-{suffix}',
+            title='Linked memory',
+            text=f'<dc:title cho="{cho.custom_id}">linked title</dc:title>',
+            file_path='demo.txt',
+        )
+        session.add_all([cho, memory])
+        session.commit()
+
+        try:
+            response = self.client.get(f'/?focus_cho={cho.custom_id}')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(
+                f'href="/?memory_id={memory.id}&filter_cho={cho.custom_id}"'.encode(),
+                response.data,
+            )
+            self.assertNotIn(
+                f'href="/?memory_id={memory.id}&focus_cho={cho.custom_id}"'.encode(),
+                response.data,
+            )
+        finally:
+            session.delete(memory)
+            session.delete(cho)
+            session.commit()
+
     def test_edit_memory_updates_database(self):
         memory = Memory(
             custom_id='test-memory',
