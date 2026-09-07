@@ -15,7 +15,7 @@ from db import CHO, Memory, session
 from services.memory_service import rebuild_memory_text
 from services.metadata import extract_metadata, get_memory_title, parse_text_and_spans
 from services.metadata_schema import METADATA_FIELDS
-from services.web_templates import COMPARE_TEMPLATE, HTML_TEMPLATE, IMPORT_TEMPLATE, SEARCH_TEMPLATE
+from services.web_templates import COMPARE_TEMPLATE, HTML_TEMPLATE, IMPORT_TEMPLATE, MAP_TEMPLATE, SEARCH_TEMPLATE
 from services.types import MetadataType
 
 
@@ -38,6 +38,8 @@ MEMORY_LICENSE_OPTIONS = (
   "CC BY-NC-ND",
   "Restricted",
 )
+MEMORY_LATITUDE_FIELD = "wgs84_pos:lat"
+MEMORY_LONGITUDE_FIELD = "wgs84_pos:long"
 
 MEMORY_FIELDS = [
     {"field": field, "label": field.split(":")[-1].replace("_", " ").title()}
@@ -316,6 +318,57 @@ def _memory_metadata_dict(text):
 def _memory_license_value(memory):
   value = getattr(memory, "license", None)
   return value.strip() if isinstance(value, str) else (value or "")
+
+
+def _memory_coordinate_values(memory):
+  coordinates = {MEMORY_LATITUDE_FIELD: "", MEMORY_LONGITUDE_FIELD: ""}
+  if memory is None:
+    return coordinates
+  for md in extract_metadata(memory.text or ""):
+    field = md.get("field")
+    if md.get("type") == MetadataType.MEMORY.value and field in coordinates:
+      coordinates[field] = md.get("value", "")
+  return coordinates
+
+
+def _normalize_coordinates(latitude, longitude):
+  if not latitude and not longitude:
+    return "", ""
+  if not latitude or not longitude:
+    raise ValueError("Provide both latitude and longitude.")
+  try:
+    latitude_value = float(latitude)
+    longitude_value = float(longitude)
+  except ValueError as error:
+    raise ValueError("Latitude and longitude must be valid decimal numbers.") from error
+  if not -90 <= latitude_value <= 90:
+    raise ValueError("Latitude must be between -90 and 90.")
+  if not -180 <= longitude_value <= 180:
+    raise ValueError("Longitude must be between -180 and 180.")
+  return str(latitude_value), str(longitude_value)
+
+
+def _memory_map_markers():
+  markers = []
+  for memory in session.query(Memory).order_by(func.lower(Memory.custom_id), Memory.id):
+    coordinates = _memory_coordinate_values(memory)
+    try:
+      latitude, longitude = _normalize_coordinates(
+        coordinates[MEMORY_LATITUDE_FIELD],
+        coordinates[MEMORY_LONGITUDE_FIELD],
+      )
+    except ValueError:
+      continue
+    if not latitude or not longitude:
+      continue
+    markers.append({
+      "id": memory.id,
+      "label": memory.custom_id or str(memory.id),
+      "title": memory.title or f"Memory {memory.id}",
+      "latitude": float(latitude),
+      "longitude": float(longitude),
+    })
+  return markers
 
 
 def _build_metadata_cache(memories):
@@ -609,7 +662,8 @@ def _create_rdf_root():
         "xmlns:rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
         "xmlns:dc": "http://purl.org/dc/elements/1.1/",
         "xmlns:dcterms": "http://purl.org/dc/terms/",
-        "xmlns:edm": "http://www.europeana.eu/schemas/edm/"
+        "xmlns:edm": "http://www.europeana.eu/schemas/edm/",
+        "xmlns:wgs84_pos": "http://www.w3.org/2003/01/geo/wgs84_pos#",
     })
 
 
@@ -817,6 +871,7 @@ def create_app(testing=False):
       edges=edges,
       focus_cho=focus_cho,
       filter_cho=filter_cho,
+      memory_coordinates=_memory_coordinate_values(selected_memory),
       focus_memory=f"memory:{memory_id}" if memory_id else "",
       selected_cho_details=selected_cho_details,
       notice_level=notice_level,
@@ -976,6 +1031,26 @@ def create_app(testing=False):
     deleted_memory_fields = set()
     deleted_cho_fields = set()
     metadata_map = _memory_metadata_dict(updated_text)
+    if "memory_latitude" in request.form or "memory_longitude" in request.form:
+      original_metadata_map = dict(metadata_map)
+      try:
+        latitude, longitude = _normalize_coordinates(
+          request.form.get("memory_latitude", "").strip(),
+          request.form.get("memory_longitude", "").strip(),
+        )
+      except ValueError as error:
+        return _redirect_with_notice("index", "error", str(error), memory_id=memory_id)
+      if latitude or longitude:
+        metadata_map[MEMORY_LATITUDE_FIELD] = latitude
+        metadata_map[MEMORY_LONGITUDE_FIELD] = longitude
+      else:
+        metadata_map.pop(MEMORY_LATITUDE_FIELD, None)
+        metadata_map.pop(MEMORY_LONGITUDE_FIELD, None)
+      if (
+        metadata_map.get(MEMORY_LATITUDE_FIELD, "") != original_metadata_map.get(MEMORY_LATITUDE_FIELD, "")
+        or metadata_map.get(MEMORY_LONGITUDE_FIELD, "") != original_metadata_map.get(MEMORY_LONGITUDE_FIELD, "")
+      ):
+        memory_metadata_ops = True
     if identifier_changed:
       metadata_map["dc:identifier"] = new_custom_id
     if memory_license_value:
@@ -987,9 +1062,13 @@ def create_app(testing=False):
       if key.startswith("delete_memory_metadata[") and key.endswith("]"):
         memory_metadata_ops = True
         field = key[len("delete_memory_metadata["):-1]
-        deleted_memory_fields.add(field)
-        metadata_map.pop(field, None)
-        updated_text = _remove_metadata_tag(updated_text, field, MetadataType.MEMORY.value)
+        fields_to_delete = {field}
+        if field in {MEMORY_LATITUDE_FIELD, MEMORY_LONGITUDE_FIELD}:
+          fields_to_delete.update({MEMORY_LATITUDE_FIELD, MEMORY_LONGITUDE_FIELD})
+        for field_to_delete in fields_to_delete:
+          deleted_memory_fields.add(field_to_delete)
+          metadata_map.pop(field_to_delete, None)
+          updated_text = _remove_metadata_tag(updated_text, field_to_delete, MetadataType.MEMORY.value)
       elif key.startswith("delete_cho_metadata[") and "]" in key:
         if key.endswith("]"):
           remainder = key[len("delete_cho_metadata["):-1]
@@ -1193,6 +1272,7 @@ def create_app(testing=False):
       edges=edges,
       focus_cho=focus_cho,
       filter_cho=filter_cho,
+      memory_coordinates=_memory_coordinate_values(selected_memory),
       focus_memory=f"memory:{memory_id}" if memory_id else "",
       selected_cho_details=selected_cho_details,
       notice_level=request.args.get("notice_level", "").strip() or "success",
@@ -1234,6 +1314,10 @@ def create_app(testing=False):
       total_pages=total_pages,
       searched=bool(request.args),
     )
+
+  @app.route("/map")
+  def map_memories():
+    return render_template_string(MAP_TEMPLATE, markers=_memory_map_markers())
 
   @app.route("/compare")
   def compare_cho():

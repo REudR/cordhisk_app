@@ -5,6 +5,7 @@ HTML_TEMPLATE = """
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CORDHISK Web</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <style>
       :root {
         --bg: #f2f6f8;
@@ -95,6 +96,14 @@ HTML_TEMPLATE = """
       .metadata-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
       .metadata-inline-edit { display: none; margin-top: 10px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px; background: #f0f7ff; }
       .metadata-inline-edit-actions { margin-top: 8px; }
+      .map-dialog { width: min(760px, calc(100vw - 32px)); border: 0; padding: 0; box-shadow: var(--shadow); }
+      .map-dialog::backdrop { background: rgba(15, 23, 42, 0.55); }
+      .map-dialog-body { padding: 16px; }
+      .map-picker { height: 430px; margin: 12px 0; border: 1px solid var(--line); }
+      .map-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+      .coordinate-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .coordinate-inputs label { display: block; font-size: 12px; margin-bottom: 3px; }
+      .dialog-select { width: 100%; padding: 8px; box-sizing: border-box; }
       .annotation-inline-edit { display: none; margin-top: 10px; padding: 10px; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; }
       #add-cho-tag-box.annotation-inline-edit { display: block; }
       .memory-mode-hide { display: none; }
@@ -184,6 +193,7 @@ HTML_TEMPLATE = """
           <div class="sidebar-button-grid">
             <a class="side-btn" href="/memories/import">Import TXT memory</a>
             <a class="side-btn" href="/search">Search</a>
+            <a class="side-btn" href="/map">Map</a>
             <a class="side-btn" href="/compare">Compare / Report</a>
             <button type="button" class="side-btn alt" id="open-add-cho">Add CHO</button>
             <button type="button" class="side-btn alt" id="open-export-cho">Download CHO RDF</button>
@@ -299,25 +309,22 @@ HTML_TEMPLATE = """
 
                 <div id="add-memory-tag-box" class="metadata-inline-edit">
                   <label>Field</label>
-                  <select name="new_memory_metadata_field">
+                  <select name="new_memory_metadata_field" id="new-memory-metadata-field">
+                    <option value="">Choose metadata field</option>
+                    <option value="__license__">License</option>
+                    <option value="__coordinates__">Coordinates</option>
                     {% for field in memory_fields %}
                     <option value="{{ field.field }}">{{ field.label }} ({{ field.field }})</option>
                     {% endfor %}
                   </select>
                   <label>Value</label>
-                  <input name="new_memory_metadata_value" placeholder="New value">
-                  <label>License</label>
-                  <select name="memory_license" id="new-memory-license-value">
-                    <option value="">Select a license</option>
-                    {% for license_option in memory_license_options %}
-                    <option value="{{ license_option }}" {% if selected_memory.license == license_option %}selected{% endif %}>{{ license_option }}</option>
-                    {% endfor %}
-                  </select>
+                  <input name="new_memory_metadata_value" id="new-memory-metadata-value" placeholder="New value">
                   <div class="metadata-inline-edit-actions">
                     <button type="submit">Save metadata changes</button>
-                    <button type="submit" name="save_memory_license" value="1">Save license</button>
                   </div>
                 </div>
+                <input id="memory-latitude" name="memory_latitude" type="hidden" value="{{ memory_coordinates['wgs84_pos:lat'] }}">
+                <input id="memory-longitude" name="memory_longitude" type="hidden" value="{{ memory_coordinates['wgs84_pos:long'] }}">
 
                 <div class="tag-section">
                   <div class="cho-tags-head">
@@ -457,6 +464,42 @@ HTML_TEMPLATE = """
         {% endif %}
       </main>
     </div>
+    <dialog class="map-dialog" id="license-dialog">
+      <div class="map-dialog-body">
+        <h3>Choose a license</h3>
+        <select class="dialog-select" id="memory-license-value" name="memory_license" form="memory-metadata-form">
+          <option value="">Select a license</option>
+          {% for license_option in memory_license_options %}
+          <option value="{{ license_option }}" {% if selected_memory and selected_memory.license == license_option %}selected{% endif %}>{{ license_option }}</option>
+          {% endfor %}
+        </select>
+        <div class="map-dialog-actions">
+          <button type="button" id="cancel-license">Cancel</button>
+          <button type="submit" name="save_memory_license" value="1" form="memory-metadata-form">Save changes</button>
+        </div>
+      </div>
+    </dialog>
+    <dialog class="map-dialog" id="map-dialog">
+      <div class="map-dialog-body">
+        <h3>Choose memory coordinates</h3>
+        <div class="coordinate-inputs">
+          <div>
+            <label for="map-latitude">Latitude</label>
+            <input id="map-latitude" type="number" step="any" min="-90" max="90" placeholder="e.g. 52.0116">
+          </div>
+          <div>
+            <label for="map-longitude">Longitude</label>
+            <input id="map-longitude" type="number" step="any" min="-180" max="180" placeholder="e.g. 4.3571">
+          </div>
+        </div>
+        <div id="coordinate-map" class="map-picker"></div>
+        <div class="map-dialog-actions">
+          <button type="button" id="cancel-map-picker">Cancel</button>
+          <button type="button" id="add-map-coordinates">Add coordinates</button>
+        </div>
+      </div>
+    </dialog>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
       document.addEventListener('DOMContentLoaded', function () {
         const isChoView = {{ 'true' if focus_cho else 'false' }};
@@ -476,7 +519,8 @@ HTML_TEMPLATE = """
         const resetButton = document.getElementById('reset-view');
         const addMemoryTagButton = document.getElementById('open-add-memory-tag');
         const addMemoryTagBox = document.getElementById('add-memory-tag-box');
-        const newMemoryLicenseValue = document.getElementById('new-memory-license-value');
+        const newMemoryMetadataField = document.getElementById('new-memory-metadata-field');
+        const newMemoryMetadataValue = document.getElementById('new-memory-metadata-value');
         const memoryMetadataForm = document.getElementById('memory-metadata-form');
         const inlineEditField = document.getElementById('inline-edit-field');
         const inlineEditValue = document.getElementById('inline-edit-value');
@@ -494,6 +538,15 @@ HTML_TEMPLATE = """
         const choTagCount = document.getElementById('cho-tag-count');
         const choTagItems = Array.from(document.querySelectorAll('.cho-tag-item'));
         const choTagsList = document.getElementById('cho-tags-list');
+        const latitudeInput = document.getElementById('memory-latitude');
+        const longitudeInput = document.getElementById('memory-longitude');
+        const licenseDialog = document.getElementById('license-dialog');
+        const cancelLicense = document.getElementById('cancel-license');
+        const mapDialog = document.getElementById('map-dialog');
+        const mapLatitudeInput = document.getElementById('map-latitude');
+        const mapLongitudeInput = document.getElementById('map-longitude');
+        const cancelMapPicker = document.getElementById('cancel-map-picker');
+        const addMapCoordinates = document.getElementById('add-map-coordinates');
         const initialChoTagFilter = {{ filter_cho | tojson }};
         const scrollStateKey = 'cordhisk:scroll:{{ selected_memory.id if selected_memory else "none" }}';
         let zoomLevel = 1;
@@ -502,6 +555,9 @@ HTML_TEMPLATE = """
         let isDragging = false;
         let startX = 0;
         let startY = 0;
+        let coordinateMap;
+        let coordinateMarker;
+        let selectedCoordinates;
 
         function captureSelection() {
           const selection = window.getSelection();
@@ -679,12 +735,10 @@ HTML_TEMPLATE = """
               return;
             }
             if (field === 'dc:license') {
-              if (addMemoryTagBox) {
-                addMemoryTagBox.style.display = 'block';
-              }
-              if (newMemoryLicenseValue) {
-                newMemoryLicenseValue.value = currentValue;
-                newMemoryLicenseValue.focus();
+              const licenseValue = document.getElementById('memory-license-value');
+              if (licenseDialog && licenseValue) {
+                licenseValue.value = currentValue;
+                licenseDialog.showModal();
               }
               return;
             }
@@ -709,6 +763,27 @@ HTML_TEMPLATE = """
           });
         }
 
+        if (newMemoryMetadataField) {
+          newMemoryMetadataField.addEventListener('change', function () {
+            const selectedField = newMemoryMetadataField.value;
+            if (selectedField === '__license__' && licenseDialog) {
+              newMemoryMetadataField.value = '';
+              licenseDialog.showModal();
+            } else if (selectedField === '__coordinates__') {
+              newMemoryMetadataField.value = '';
+              openCoordinatePicker();
+            } else if (newMemoryMetadataValue) {
+              newMemoryMetadataValue.focus();
+            }
+          });
+        }
+
+        if (cancelLicense && licenseDialog) {
+          cancelLicense.addEventListener('click', function () {
+            licenseDialog.close();
+          });
+        }
+
         if (openAddCho && addChoPop) {
           openAddCho.addEventListener('click', function () {
             const open = addChoPop.style.display === 'block';
@@ -720,6 +795,85 @@ HTML_TEMPLATE = """
           openExportCho.addEventListener('click', function () {
             const open = exportChoPop.style.display === 'block';
             exportChoPop.style.display = open ? 'none' : 'block';
+          });
+        }
+
+        const openCoordinatePicker = function () {
+          if (!mapDialog || !latitudeInput || !longitudeInput || !mapLatitudeInput || !mapLongitudeInput || !window.L) {
+            return;
+          }
+          const defaultCoordinates = [20, 0];
+          const showSelectedCoordinates = function (latitude, longitude) {
+            selectedCoordinates = [latitude, longitude];
+            mapLatitudeInput.value = latitude.toFixed(6);
+            mapLongitudeInput.value = longitude.toFixed(6);
+            if (coordinateMarker) {
+              coordinateMarker.setLatLng(selectedCoordinates);
+            } else {
+              coordinateMarker = L.marker(selectedCoordinates).addTo(coordinateMap);
+            }
+          };
+          const latitude = Number(latitudeInput.value);
+          const longitude = Number(longitudeInput.value);
+          const hasCoordinates = latitudeInput.value.trim() !== ''
+            && longitudeInput.value.trim() !== ''
+            && Number.isFinite(latitude)
+            && Number.isFinite(longitude);
+          mapLatitudeInput.value = hasCoordinates ? latitude : '';
+          mapLongitudeInput.value = hasCoordinates ? longitude : '';
+          mapDialog.showModal();
+          if (!coordinateMap) {
+            coordinateMap = L.map('coordinate-map').setView(hasCoordinates ? [latitude, longitude] : defaultCoordinates, hasCoordinates ? 12 : 2);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; OpenStreetMap contributors',
+            }).addTo(coordinateMap);
+            coordinateMap.on('click', function (event) {
+              showSelectedCoordinates(event.latlng.lat, event.latlng.lng);
+            });
+          } else {
+            coordinateMap.setView(hasCoordinates ? [latitude, longitude] : defaultCoordinates, hasCoordinates ? 12 : 2);
+          }
+          if (hasCoordinates) {
+            showSelectedCoordinates(latitude, longitude);
+          } else {
+            selectedCoordinates = null;
+            if (coordinateMarker) {
+              coordinateMap.removeLayer(coordinateMarker);
+              coordinateMarker = null;
+            }
+          }
+          coordinateMap.invalidateSize();
+        };
+
+        if (mapDialog && latitudeInput && longitudeInput && mapLatitudeInput && mapLongitudeInput && window.L) {
+          const updateMarkerFromInputs = function () {
+            const latitude = Number(mapLatitudeInput.value);
+            const longitude = Number(mapLongitudeInput.value);
+            const hasCoordinates = mapLatitudeInput.value.trim() !== ''
+              && mapLongitudeInput.value.trim() !== ''
+              && Number.isFinite(latitude)
+              && Number.isFinite(longitude);
+            if (hasCoordinates) {
+              selectedCoordinates = [latitude, longitude];
+              if (coordinateMap) {
+                coordinateMap.setView(selectedCoordinates, 12);
+                if (coordinateMarker) {
+                  coordinateMarker.setLatLng(selectedCoordinates);
+                } else {
+                  coordinateMarker = L.marker(selectedCoordinates).addTo(coordinateMap);
+                }
+              }
+            }
+          };
+          mapLatitudeInput.addEventListener('change', updateMarkerFromInputs);
+          mapLongitudeInput.addEventListener('change', updateMarkerFromInputs);
+          cancelMapPicker.addEventListener('click', function () {
+            mapDialog.close();
+          });
+          addMapCoordinates.addEventListener('click', function () {
+            latitudeInput.value = mapLatitudeInput.value;
+            longitudeInput.value = mapLongitudeInput.value;
+            memoryMetadataForm.submit();
           });
         }
 
@@ -1146,6 +1300,85 @@ COMPARE_TEMPLATE = """
       </div>
       {% endif %}
     </div>
+  </body>
+</html>
+"""
+
+MAP_TEMPLATE = """
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Memory map - CORDHISK</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <style>
+      :root { --ink: #1b1f24; --brand: #0072b2; --surface: #ffffff; --line: #cfd8df; --bg: #f2f6f8; }
+      body { font-family: "Avenir Next", "Segoe UI", sans-serif; margin: 0; background: var(--bg); color: var(--ink); }
+      .wrap { max-width: 1200px; margin: 0 auto; padding: 24px; }
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+      h1 { margin: 0; font-size: 28px; }
+      p { margin: 6px 0 0; color: #475569; }
+      a { color: #005b8f; text-decoration: none; }
+      .back-link { display: inline-block; padding: 8px 12px; border-radius: 6px; background: var(--brand); color: white; white-space: nowrap; }
+      .map { height: min(70vh, 680px); min-height: 420px; border: 1px solid var(--line); }
+      .empty { padding: 24px; border: 1px solid var(--line); background: var(--surface); }
+      .memory-list { margin: 20px 0 0; padding: 0; list-style: none; columns: 2; }
+      .memory-list li { margin: 0 0 8px; break-inside: avoid; }
+      .marker-title { font-weight: 700; margin-bottom: 4px; }
+      @media (max-width: 700px) { .topbar { align-items: flex-start; flex-direction: column; } .memory-list { columns: 1; } }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <div class="topbar">
+        <div>
+          <h1>Memory map</h1>
+          <p>Explore memories with stored WGS84 coordinates.</p>
+        </div>
+        <a class="back-link" href="/">Back to main page</a>
+      </div>
+      {% if markers %}
+      <div id="memory-map" class="map" role="application" aria-label="Map of memories with coordinates"></div>
+      <ul class="memory-list">
+        {% for marker in markers %}
+        <li><a href="/?memory_id={{ marker.id }}">{{ marker.label }} - {{ marker.title }}</a> ({{ marker.latitude }}, {{ marker.longitude }})</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="empty">No memories with valid coordinates are available yet.</div>
+      {% endif %}
+    </main>
+    {% if markers %}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      const markers = {{ markers | tojson }};
+      const map = L.map('memory-map');
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(map);
+      const bounds = [];
+      markers.forEach(function (memory) {
+        const coordinates = [memory.latitude, memory.longitude];
+        const popup = document.createElement('div');
+        const title = document.createElement('div');
+        title.className = 'marker-title';
+        title.textContent = memory.label + ' - ' + memory.title;
+        const link = document.createElement('a');
+        link.href = '/?memory_id=' + encodeURIComponent(memory.id);
+        link.textContent = 'Open memory';
+        popup.appendChild(title);
+        popup.appendChild(link);
+        L.marker(coordinates).addTo(map).bindPopup(popup);
+        bounds.push(coordinates);
+      });
+      if (bounds.length === 1) {
+        map.setView(bounds[0], 12);
+      } else {
+        map.fitBounds(bounds, { padding: [32, 32] });
+      }
+    </script>
+    {% endif %}
   </body>
 </html>
 """

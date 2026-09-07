@@ -101,6 +101,8 @@ Users can create CHOs with a stable ID and name, then use them as targets when a
 
 Memory import accepts `.txt` files. CORDHISK detects an existing memory metadata block when present, prefills the import form, retains compatible metadata, assigns an identifier, and writes the imported content to `memory_files/`. Memory edits also synchronize the database record and its associated text file. When a memory identifier changes, the corresponding application-managed filename is updated.
 
+Memories can also store WGS84 latitude and longitude as `wgs84_pos:lat` and `wgs84_pos:long` fields in their metadata preamble. The Memory metadata field menu opens a dedicated dialog for license selection and a map dialog for coordinates. Coordinates can be entered manually in the dialog or selected by clicking a point on the map. The Map page displays memories with valid coordinate pairs as interactive markers; each marker and its accompanying list entry opens the selected Memory view. Records with incomplete or invalid coordinates are excluded from the map.
+
 ## 7. Search, comparison, and reporting
 
 ### Search

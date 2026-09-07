@@ -999,6 +999,141 @@ class WebAppTests(unittest.TestCase):
             session.delete(memory)
             session.commit()
 
+    def test_memory_coordinates_are_saved_to_the_metadata_preamble(self):
+        memory = Memory(
+            custom_id='test-memory-coordinates',
+            title='Coordinate test',
+            text='Body text only',
+            file_path='demo.txt',
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.post(
+                f'/memories/{memory.id}/edit',
+                data={
+                    'memory_latitude': '52.011576',
+                    'memory_longitude': '4.357068',
+                },
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            updated = session.get(Memory, memory.id)
+            self.assertIn('<wgs84_pos:lat type="memory">52.011576</wgs84_pos:lat>', updated.text)
+            self.assertIn('<wgs84_pos:long type="memory">4.357068</wgs84_pos:long>', updated.text)
+            self.assertIn(b'id="new-memory-metadata-field"', response.data)
+            self.assertIn(b'<option value="__coordinates__">Coordinates</option>', response.data)
+            self.assertIn(b'id="map-dialog"', response.data)
+            self.assertIn(b'id="license-dialog"', response.data)
+            self.assertIn(b'value="52.011576"', response.data)
+            self.assertIn(b'value="4.357068"', response.data)
+        finally:
+            session.delete(memory)
+            session.commit()
+
+    def test_memory_coordinates_reject_invalid_ranges(self):
+        memory = Memory(
+            custom_id='test-invalid-coordinates',
+            title='Invalid coordinate test',
+            text='Body text only',
+            file_path='demo.txt',
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.post(
+                f'/memories/{memory.id}/edit',
+                data={
+                    'memory_latitude': '91',
+                    'memory_longitude': '4.357068',
+                },
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'Latitude must be between -90 and 90.', response.data)
+            self.assertNotIn('wgs84_pos:lat', session.get(Memory, memory.id).text)
+        finally:
+            session.delete(memory)
+            session.commit()
+
+    def test_removing_one_coordinate_tag_removes_the_coordinate_pair(self):
+        memory = Memory(
+            custom_id='test-remove-coordinates',
+            title='Remove coordinate test',
+            text=(
+                '=== MEMORY METADATA START ===\n'
+                '<wgs84_pos:lat type="memory">52.011576</wgs84_pos:lat>\n'
+                '<wgs84_pos:long type="memory">4.357068</wgs84_pos:long>\n'
+                '=== MEMORY METADATA END ===\n\nBody text'
+            ),
+            file_path='demo.txt',
+        )
+        session.add(memory)
+        session.commit()
+        session.refresh(memory)
+
+        try:
+            response = self.client.post(
+                f'/memories/{memory.id}/edit',
+                data={
+                    'memory_latitude': '52.011576',
+                    'memory_longitude': '4.357068',
+                    'delete_memory_metadata[wgs84_pos:lat]': '1',
+                },
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            updated = session.get(Memory, memory.id)
+            self.assertNotIn('wgs84_pos:lat', updated.text)
+            self.assertNotIn('wgs84_pos:long', updated.text)
+        finally:
+            session.delete(memory)
+            session.commit()
+
+    def test_map_lists_validly_geocoded_memories_and_links_to_them(self):
+        valid_memory = Memory(
+            custom_id='test-map-memory',
+            title='Mapped memory',
+            text=(
+                '=== MEMORY METADATA START ===\n'
+                '<wgs84_pos:lat type="memory">52.011576</wgs84_pos:lat>\n'
+                '<wgs84_pos:long type="memory">4.357068</wgs84_pos:long>\n'
+                '=== MEMORY METADATA END ===\n\nMapped text'
+            ),
+            file_path='demo.txt',
+        )
+        invalid_memory = Memory(
+            custom_id='test-invalid-map-memory',
+            title='Invalid mapped memory',
+            text=(
+                '=== MEMORY METADATA START ===\n'
+                '<wgs84_pos:lat type="memory">invalid</wgs84_pos:lat>\n'
+                '<wgs84_pos:long type="memory">4.357068</wgs84_pos:long>\n'
+                '=== MEMORY METADATA END ===\n\nInvalid mapped text'
+            ),
+            file_path='demo.txt',
+        )
+        session.add_all([valid_memory, invalid_memory])
+        session.commit()
+        session.refresh(valid_memory)
+
+        try:
+            response = self.client.get('/map')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'Memory map', response.data)
+            self.assertIn(b'test-map-memory - Mapped memory', response.data)
+            self.assertIn(f'href="/?memory_id={valid_memory.id}"'.encode(), response.data)
+            self.assertIn(b'52.011576', response.data)
+            self.assertNotIn(b'test-invalid-map-memory', response.data)
+        finally:
+            session.delete(valid_memory)
+            session.delete(invalid_memory)
+            session.commit()
+
     def test_save_memory_license_updates_preamble_and_database(self):
         memory = Memory(
             custom_id='test-memory-license-save',

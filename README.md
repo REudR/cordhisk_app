@@ -25,6 +25,7 @@ Open http://127.0.0.1:5000/ in a browser. The application runs with Flask's deve
 - Edit memory metadata, including identifiers and usage licenses, and manage individual CHO tags.
 - Navigate relationships in interactive Memory and CHO views, including a relationship graph.
 - Filter the CHO tags displayed for a selected memory.
+- Add Memory metadata from the field menu, including license selection and WGS84 coordinates entered manually or selected on a map, then explore geocoded memories on an interactive map.
 - Search memory text with paginated results.
 - Compare one CHO across its related memories in a field-by-memory matrix.
 - Generate a CHO report grouped by metadata field and instance frequency, with links to related memories and CSV download.

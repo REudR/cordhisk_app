@@ -48,6 +48,8 @@ METADATA_FIELDS = {
         "fields": {
             "dc:identifier": {"label": "Identifier", "description": "Stable identifier for the memory."},
             "dc:license": {"label": "License", "description": "Usage license selected for the memory."},
+            "wgs84_pos:lat": {"label": "Latitude", "description": "WGS84 latitude in decimal degrees."},
+            "wgs84_pos:long": {"label": "Longitude", "description": "WGS84 longitude in decimal degrees."},
             "web:dc:creator": {"label": "Creator", "description": "Person or group that created the web resource."},
             "web:dc:description": {"label": "Description", "description": "Summary or notes about the web resource."},
             "web:dc:source": {"label": "Source", "description": "Source that the web resource came from."},
