@@ -283,6 +283,8 @@ class WebAppTests(unittest.TestCase):
         page = response.data.decode()
         self.assertIn("document.querySelectorAll('.tag-selector input').forEach(function (otherInput)", page)
         self.assertIn('otherInput.checked = false;', page)
+        self.assertIn('class="pill remove" name="remove_selected"', page)
+        self.assertNotIn('<div class="cho-filter-row">\n                    <button type="submit"', page)
 
     def test_graph_page_loads(self):
         response = self.client.get('/graph')

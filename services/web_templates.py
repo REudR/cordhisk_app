@@ -28,6 +28,7 @@ HTML_TEMPLATE = """
       .pill.memory { background: #d8ebf7; color: #005b8f; border-color: #9fcae2; }
       .pill.cho { background: #d8f1e6; color: #0f6f55; border-color: #9ad7c2; }
       .pill.add { background: #0072b2; color: white; border-color: #005b8f; cursor: pointer; font-weight: 700; min-width: 28px; justify-content: center; }
+      .pill.remove { background: #e69f00; color: #1f2937; border-color: #b77900; cursor: pointer; font-weight: 700; min-width: 28px; justify-content: center; }
       .pill.selected { box-shadow: 0 0 0 2px #0f172a inset; }
       .text-view { font-family: inherit; font-size: 14px; line-height: 1.7; white-space: pre-line; }
       .text-view p { margin: 0 0 10px; }
@@ -303,7 +304,8 @@ HTML_TEMPLATE = """
                     {% else %}
                     <span class="pill memory">No memory metadata</span>
                     {% endfor %}
-                    <button type="button" class="pill add" id="open-add-memory-tag" title="Add memory metadata">+</button>
+                    <button type="button" class="pill add" id="open-add-memory-tag" title="Add memory metadata">Add</button>
+                    <button type="submit" class="pill remove" name="remove_selected" value="1" title="Remove selected metadata" onclick="return confirm('Remove selected metadata tags?');">Remove</button>
                   </div>
                 </div>
 
@@ -331,7 +333,6 @@ HTML_TEMPLATE = """
                     <h4>CHO tags in this memory</h4>
                   </div>
                   <div class="cho-filter-row">
-                    <button type="submit" name="remove_selected" value="1" onclick="return confirm('Remove selected metadata tags?');">-</button>
                     <label for="cho-tag-filter">Filter CHO</label>
                     <select id="cho-tag-filter" name="cho_tag_filter">
                       <option value="">All CHO</option>
