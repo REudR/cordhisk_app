@@ -2,6 +2,8 @@
 
 CORDHISK is a browser-based application for annotating textual memories and connecting their passages to Cultural Heritage Objects (CHOs) through structured metadata.
 
+For a complete functional and technical description suitable for project documentation or a thesis appendix, see [Design, Operation, and Capabilities](ARCHITECTURE.md).
+
 ## Run locally
 
 Requires Python 3.10 or later.
