@@ -18,7 +18,7 @@ HTML_TEMPLATE = """
       }
       body { font-family: "Avenir Next", "Segoe UI", sans-serif; margin: 0; background: radial-gradient(circle at 10% 10%, #f9fbfc 0%, var(--bg) 52%, #e8eef2 100%); color: var(--ink); }
       .shell { display: grid; grid-template-columns: 450px 1fr; min-height: 100vh; }
-      .sidebar { background: linear-gradient(180deg, #0f3b5a 0%, #0d5660 100%); color: white; padding: 20px; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+      .sidebar { position: relative; background: linear-gradient(180deg, #0f3b5a 0%, #0d5660 100%); color: white; padding: 20px; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
       .sidebar h2 { margin: 0 0 4px; }
       .sidebar-subtitle { margin: 0 0 10px; font-size: 14px; }
       .content { padding: 24px; }
@@ -119,13 +119,18 @@ HTML_TEMPLATE = """
       .sidebar-pop input, .sidebar-pop select { margin-bottom: 8px; }
       .sidebar-card { background: #f8fbff; }
       .sidebar-card h3 { color: #0f172a; }
-      .sidebar-button-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
-      .side-btn, .side-btn:visited { display: inline-flex; align-items: center; justify-content: center; text-align: center; min-height: 34px; padding: 6px; border-radius: 8px; color: white; background: #0072b2; border: 0; font-size: 12px; font-weight: 600; }
-      .side-btn.alt { background: #009e73; }
+      .sidebar-button-grid { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; padding: 4px 0; }
+      .side-btn, .side-btn:visited { display: flex; align-items: center; justify-content: flex-start; width: 100%; min-height: 30px; padding: 6px 10px; border-radius: 4px; color: #dbeafe; background: transparent; border: 0; font-size: 13px; font-weight: 600; text-align: left; }
+      .side-btn:hover { background: rgba(255, 255, 255, 0.12); color: white; }
+      .side-btn.alt { background: transparent; color: #bbf7d0; }
+      .side-btn.alt:hover { background: rgba(255, 255, 255, 0.12); color: white; }
       .side-btn.disabled { pointer-events: none; opacity: 0.6; }
       .menu-toggle { display: block; width: 100%; margin-bottom: 10px; background: #0072b2; }
       .menu-toggle.active { background: #009e73; }
+      .sidebar-menu { position: absolute; top: 86px; left: 20px; right: 20px; z-index: 20; padding: 10px; border: 1px solid rgba(148, 163, 184, 0.45); border-radius: 8px; background: rgba(15, 59, 90, 0.98); box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28); }
       .sidebar-menu.hidden { display: none; }
+      .menu-close { display: block; margin: 0 0 6px auto; padding: 2px 8px; background: transparent; color: #bfdbfe; font-size: 12px; }
+      .menu-close:hover { background: rgba(255, 255, 255, 0.12); color: white; }
       .selection-value { font-style: italic; font-weight: 700; }
       .cho-tags-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
       .cho-tags-head h4 { margin: 0; }
@@ -139,6 +144,8 @@ HTML_TEMPLATE = """
       .list-selector { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; }
       .list-selector button { background: #334155; font-size: 12px; padding: 6px 8px; }
       .list-selector button.active { background: #0072b2; }
+      .list-selector .menu-toggle { width: auto; margin: 0; background: #0072b2; }
+      .list-selector .menu-toggle.active { background: #009e73; }
       .sidebar-list-shell { flex: 0 0 auto; min-height: 180px; max-height: 64vh; margin-bottom: 12px; }
       .sidebar-list-shell .list-panel { margin-bottom: 0; height: 100%; overflow-y: auto; }
       .list-panel.hidden { display: none; }
@@ -151,6 +158,7 @@ HTML_TEMPLATE = """
       .annotation-title { font-weight: 400; }
       .memory-title { margin: 0 0 10px; font-size: 1em; font-weight: 700; }
       .metadata-helper { color: #475569; font-size: 13px; margin: 0 0 8px; }
+      .memory-tags-title { color: #1b1f24; }
       .right-panel { display: flex; flex-direction: column; }
       .right-panel .metadata-card { order: 1; }
       .right-panel .memory-text-card { order: 2; }
@@ -189,8 +197,8 @@ HTML_TEMPLATE = """
       <aside class="sidebar">
         <h2>CORDHISK APP v2.4</h2>
         <p class="sidebar-subtitle">Memories, metadata, and cultural heritage objects (CHO).</p>
-        <button type="button" class="menu-toggle" id="toggle-menu">Menu</button>
         <div class="sidebar-menu hidden" id="sidebar-menu">
+          <button type="button" class="menu-close" id="close-menu">Close menu</button>
           <div class="sidebar-button-grid">
             <a class="side-btn" href="/memories/import">Import TXT memory</a>
             <a class="side-btn" href="/search">Search</a>
@@ -237,9 +245,9 @@ HTML_TEMPLATE = """
           </div>
         </div>
         <div class="list-selector">
+          <button type="button" class="menu-toggle" id="toggle-menu">Menu</button>
           <button type="button" id="show-memories-btn" class="active">Memories</button>
           <button type="button" id="show-chos-btn">CHO records</button>
-          <button type="button" id="show-tags-btn" {% if not selected_memory %}disabled{% endif %}>Tags</button>
         </div>
         <div class="sidebar-list-shell">
           <div class="card sidebar-card list-panel" id="memories-panel">
@@ -269,23 +277,13 @@ HTML_TEMPLATE = """
           <div class="card sidebar-card list-panel hidden" id="tags-panel">
             {% if selected_memory %}
             <div id="memory-tags-panel">
-              <div class="cho-tags-head">
-                <h4>Memory tags</h4>
+              <div class="cho-tags-head memory-tags-title">
+                <h4>{{ selected_memory.custom_id or selected_memory.id }} — {{ selected_memory.title or ('Memory ' ~ selected_memory.id) }}</h4>
               </div>
               <form action="/memories/{{ selected_memory.id }}/edit" method="post" id="memory-metadata-form">
                 <input type="hidden" name="focus_cho" value="{{ focus_cho or '' }}">
                 <input type="hidden" id="inline-edit-field" name="edit_memory_metadata_field" value="">
                 <input type="hidden" id="inline-edit-value" name="edit_memory_metadata_value" value="">
-
-                <div class="inline-annotation-row">
-                  <div>
-                    <label for="memory-custom-id">Memory identifier</label>
-                    <input id="memory-custom-id" name="custom_id" value="{{ selected_memory.custom_id or selected_memory.id }}" required>
-                  </div>
-                  <div>
-                    <button type="submit" name="save_memory_identifier" value="1">Save identifier</button>
-                  </div>
-                </div>
 
                 <div class="tag-section">
                   <p class="tag-help">Double-click a memory tag to update its value. Use checkboxes and remove selected tags.</p>
@@ -305,6 +303,7 @@ HTML_TEMPLATE = """
                     <span class="pill memory">No memory metadata</span>
                     {% endfor %}
                     <button type="button" class="pill add" id="open-add-memory-tag" title="Add memory metadata">Add</button>
+                    <button type="button" class="pill remove" id="open-edit-memory-id" title="Edit memory identifier">Edit ID</button>
                     <button type="submit" class="pill remove" name="remove_selected" value="1" title="Remove selected metadata" onclick="return confirm('Remove selected metadata tags?');">Remove</button>
                   </div>
                 </div>
@@ -390,7 +389,7 @@ HTML_TEMPLATE = """
           <div class="right-panel">
             {% if not focus_cho %}
             <div class="card memory-text-card">
-              <h4 class="memory-title">{{ selected_memory.custom_id or selected_memory.id }} — {{ selected_memory.title or ('Memory ' ~ selected_memory.id) }}</h4>
+              <h4 class="memory-title">Memory content</h4>
               <form action="/memories/{{ selected_memory.id }}/annotate" method="post" id="memory-annotation-form">
                 <p class="annotation-title metadata-helper">Annotate highlighted memory text</p>
                 <div class="annotation-toolbar">
@@ -465,6 +464,16 @@ HTML_TEMPLATE = """
         {% endif %}
       </main>
     </div>
+    <dialog class="map-dialog" id="memory-id-dialog">
+      <div class="map-dialog-body">
+        <h3>Edit memory identifier</h3>
+        <input id="memory-custom-id" name="custom_id" value="{{ selected_memory.custom_id or selected_memory.id if selected_memory else '' }}" required form="memory-metadata-form">
+        <div class="map-dialog-actions">
+          <button type="button" id="cancel-memory-id">Cancel</button>
+          <button type="submit" name="save_memory_identifier" value="1" form="memory-metadata-form">Save changes</button>
+        </div>
+      </div>
+    </dialog>
     <dialog class="map-dialog" id="license-dialog">
       <div class="map-dialog-body">
         <h3>Choose a license</h3>
@@ -511,6 +520,7 @@ HTML_TEMPLATE = """
         const memoryAnnotationForm = document.getElementById('memory-annotation-form');
         const addChoTagBox = document.getElementById('add-cho-tag-box');
         const menuToggleButton = document.getElementById('toggle-menu');
+        const closeMenuButton = document.getElementById('close-menu');
         const sidebarMenu = document.getElementById('sidebar-menu');
         const svg = document.getElementById('graph-svg');
         const graphContent = document.getElementById('graph-content');
@@ -529,9 +539,11 @@ HTML_TEMPLATE = """
         const addChoPop = document.getElementById('add-cho-pop');
         const openExportCho = document.getElementById('open-export-cho');
         const exportChoPop = document.getElementById('export-cho-pop');
+        const openEditMemoryId = document.getElementById('open-edit-memory-id');
+        const memoryIdDialog = document.getElementById('memory-id-dialog');
+        const cancelMemoryId = document.getElementById('cancel-memory-id');
         const showMemoriesBtn = document.getElementById('show-memories-btn');
         const showChosBtn = document.getElementById('show-chos-btn');
-        const showTagsBtn = document.getElementById('show-tags-btn');
         const memoriesPanel = document.getElementById('memories-panel');
         const chosPanel = document.getElementById('chos-panel');
         const tagsPanel = document.getElementById('tags-panel');
@@ -684,14 +696,28 @@ HTML_TEMPLATE = """
         }
 
         if (menuToggleButton && sidebarMenu) {
+          const closeMenu = function () {
+            menuToggleButton.classList.remove('active');
+            sidebarMenu.classList.add('hidden');
+          };
           const syncMenu = function () {
             if (!menuToggleButton.classList.contains('active')) {
-              sidebarMenu.classList.add('hidden');
+              closeMenu();
             }
           };
           menuToggleButton.addEventListener('click', function () {
             const open = menuToggleButton.classList.toggle('active');
             sidebarMenu.classList.toggle('hidden', !open);
+          });
+          if (closeMenuButton) {
+            closeMenuButton.addEventListener('click', closeMenu);
+          }
+          document.addEventListener('click', function (event) {
+            if (!sidebarMenu.classList.contains('hidden')
+              && !sidebarMenu.contains(event.target)
+              && !menuToggleButton.contains(event.target)) {
+              closeMenu();
+            }
           });
           window.addEventListener('resize', syncMenu);
           syncMenu();
@@ -799,6 +825,23 @@ HTML_TEMPLATE = """
           });
         }
 
+        if (openEditMemoryId && memoryIdDialog) {
+          openEditMemoryId.addEventListener('click', function () {
+            memoryIdDialog.showModal();
+            const memoryIdInput = document.getElementById('memory-custom-id');
+            if (memoryIdInput) {
+              memoryIdInput.focus();
+              memoryIdInput.select();
+            }
+          });
+        }
+
+        if (cancelMemoryId && memoryIdDialog) {
+          cancelMemoryId.addEventListener('click', function () {
+            memoryIdDialog.close();
+          });
+        }
+
         const openCoordinatePicker = function () {
           if (!mapDialog || !latitudeInput || !longitudeInput || !mapLatitudeInput || !mapLongitudeInput || !window.L) {
             return;
@@ -888,15 +931,9 @@ HTML_TEMPLATE = """
             tagsPanel.classList.toggle('hidden', !showTags);
             showMemoriesBtn.classList.toggle('active', showMemories);
             showChosBtn.classList.toggle('active', showChos);
-            if (showTagsBtn) {
-              showTagsBtn.classList.toggle('active', showTags);
-            }
           };
           showMemoriesBtn.addEventListener('click', function () { selectList('memories'); });
           showChosBtn.addEventListener('click', function () { selectList('chos'); });
-          if (showTagsBtn) {
-            showTagsBtn.addEventListener('click', function () { selectList('tags'); });
-          }
           {% if focus_cho %}
           selectList('chos');
           {% elif selected_memory %}

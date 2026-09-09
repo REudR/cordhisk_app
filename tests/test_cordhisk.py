@@ -324,6 +324,28 @@ class WebAppTests(unittest.TestCase):
         self.assertIn('class="pill remove" name="remove_selected"', page)
         self.assertNotIn('<div class="cho-filter-row">\n                    <button type="submit"', page)
 
+    def test_memory_selection_shows_edit_id_dialog(self):
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        page = response.data.decode()
+        self.assertIn('id="show-memories-btn"', page)
+        self.assertIn('id="show-chos-btn"', page)
+        self.assertNotIn('id="show-tags-btn"', page)
+        self.assertIn('id="open-edit-memory-id"', page)
+        self.assertIn('id="memory-id-dialog"', page)
+        self.assertIn('name="save_memory_identifier"', page)
+        self.assertIn('id="cancel-memory-id"', page)
+        self.assertNotIn('id="back-to-memories"', page)
+        self.assertIn("selectList('tags');", page)
+        self.assertIn('.sidebar-button-grid { display: flex; flex-direction: column;', page)
+        self.assertIn('.side-btn:hover { background: rgba(255, 255, 255, 0.12);', page)
+        self.assertIn('.sidebar-menu { position: absolute;', page)
+        self.assertIn('id="close-menu"', page)
+        self.assertIn('closeMenuButton.addEventListener(\'click\', closeMenu);', page)
+        self.assertIn('class="cho-tags-head memory-tags-title"', page)
+        self.assertIn('class="memory-title">Memory content</h4>', page)
+        self.assertNotIn('>Memory tags</h4>', page)
+
     def test_graph_page_loads(self):
         response = self.client.get('/graph')
         self.assertEqual(response.status_code, 200)
