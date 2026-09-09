@@ -403,6 +403,7 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
   seen_nodes = {}
   cho_metadata_positions = {}
   cho_base_y = {}
+  active_cho_refs = None
 
   def add_node(node_id, label, group, x, y, link, radius=32, parent_id="", details="", memory_owner_id=""):
     if node_id not in seen_nodes:
@@ -444,10 +445,18 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
     target_cho = next((item for item in cho_rows if str(item.custom_id) == str(focus_cho) or str(item.id) == str(focus_cho)), None)
     if target_cho is None:
       target_cho = next((item for item in cho_rows if str(item.custom_id) == str(focus_cho)), None)
+    focus_cho_refs = {str(focus_cho)}
+    if target_cho is not None:
+      focus_cho_refs.update({str(target_cho.id), str(target_cho.custom_id)})
+    active_cho_refs = focus_cho_refs
     relevant_memories = []
     for memory in memories:
       metadata_items = metadata_by_memory_id.get(memory.id, [])
-      if matches_cho(metadata_items, focus_cho):
+      if any(
+        md.get("type") == MetadataType.CHO.value
+        and str(md.get("cho")) in focus_cho_refs
+        for md in metadata_items
+      ):
         relevant_memories.append(memory)
     memories = relevant_memories
     cho_rows = [target_cho] if target_cho is not None else []
@@ -500,12 +509,14 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
       if md.get("type") == MetadataType.MEMORY.value:
         continue  # skip memory metadata entirely
       elif md.get("type") == MetadataType.CHO.value and md.get("cho"):
+        if active_cho_refs is not None and str(md.get("cho")) not in active_cho_refs:
+          continue
         cho = cho_lookup.get(str(md.get("cho")))
         if cho is None:
           continue
         cho_key = str(cho.custom_id or cho.id)
         cho_y = cho_base_y.get(cho_key, 140)
-        cho_link = f"/?memory_id={selected_memory_id or ''}&focus_cho={cho.custom_id or cho.id}" if selected_memory_id is not None else f"/?focus_cho={cho.custom_id or cho.id}"
+        cho_link = f"/?focus_cho={cho.custom_id or cho.id}"
         field_name = md.get("field", "")
         display_field = _metadata_label(field_name)
         cho_label = _cho_display_label(cho)

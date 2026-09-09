@@ -258,7 +258,7 @@ HTML_TEMPLATE = """
             <ul class="sidebar-list">
               {% for cho in chos %}
               <li>
-                <a href="/?memory_id={{ selected_memory.id if selected_memory else '' }}&focus_cho={{ cho.custom_id or cho.id }}">{{ cho.custom_id or cho.id }} — {{ cho.title or cho.custom_id or cho.id }}</a>
+                <a href="/?focus_cho={{ cho.custom_id or cho.id }}">{{ cho.custom_id or cho.id }} — {{ cho.title or cho.custom_id or cho.id }}</a>
                 <form action="/chos/{{ cho.id }}/delete{% if selected_memory %}?memory_id={{ selected_memory.id }}{% endif %}" method="post" onsubmit="return confirm('Delete this CHO and remove its tags from all memories?');">
                   <button type="submit" class="mini-delete" title="Delete CHO">-</button>
                 </form>

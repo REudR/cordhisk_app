@@ -74,12 +74,50 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             page = response.data.decode()
             self.assertIn(f'<a href="/?memory_id={memory.id}">', page)
-            self.assertIn(f'<a href="/?memory_id={memory.id}&focus_cho={cho.custom_id}">', page)
+            self.assertIn(f'<a href="/?focus_cho={cho.custom_id}">', page)
             self.assertNotIn('collapsedByMemory', page)
             self.assertNotIn('collapsedByCho', page)
         finally:
             session.delete(memory)
             session.delete(cho)
+            session.commit()
+
+    def test_cho_view_graph_contains_only_selected_cho_network(self):
+        suffix = uuid.uuid4().hex
+        selected_cho = CHO(custom_id=f'cho-focused-{suffix}', title='Focused CHO')
+        other_cho = CHO(custom_id=f'cho-other-{suffix}', title='Other CHO')
+        selected_memory = Memory(
+            custom_id=f'memory-focused-{suffix}',
+            title='Focused memory',
+            text=(
+                f'<dc:title cho="{selected_cho.custom_id}">selected tag</dc:title> '
+                f'<dc:subject cho="{other_cho.custom_id}">other tag in same memory</dc:subject>'
+            ),
+            file_path='demo.txt',
+        )
+        other_memory = Memory(
+            custom_id=f'memory-other-{suffix}',
+            title='Other memory',
+            text=f'<dc:title cho="{other_cho.custom_id}">other tag</dc:title>',
+            file_path='demo.txt',
+        )
+        session.add_all([selected_cho, other_cho, selected_memory, other_memory])
+        session.commit()
+
+        try:
+            response = self.client.get(f'/?focus_cho={selected_cho.custom_id}')
+            self.assertEqual(response.status_code, 200)
+            page = response.data.decode()
+            self.assertIn(selected_cho.custom_id, page)
+            self.assertIn(f'data-node-id="memory:{selected_memory.id}"', page)
+            self.assertNotIn(f'data-node-id="memory:{other_memory.id}"', page)
+            self.assertIn(f'data-node-id="cho:{selected_cho.custom_id}"', page)
+            self.assertNotIn(f'data-node-id="cho:{other_cho.custom_id}"', page)
+        finally:
+            session.delete(selected_memory)
+            session.delete(other_memory)
+            session.delete(selected_cho)
+            session.delete(other_cho)
             session.commit()
 
     def test_cho_view_memory_links_open_memory_view_with_cho_filter(self):
@@ -289,7 +327,7 @@ class WebAppTests(unittest.TestCase):
     def test_graph_page_loads(self):
         response = self.client.get('/graph')
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b'CORDHISK APP v2.3', response.data)
+        self.assertIn(b'CORDHISK APP v2.4', response.data)
         self.assertIn(b'CHO records', response.data)
 
     def test_edit_cho_metadata_updates_memory_text(self):
