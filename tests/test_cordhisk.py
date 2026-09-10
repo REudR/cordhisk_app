@@ -5,7 +5,7 @@ import unittest
 import uuid
 
 from db import CHO, Memory, session
-from cordhisk import create_app
+from cordhisk import _build_graph_data, create_app
 
 
 class WebAppTests(unittest.TestCase):
@@ -381,6 +381,25 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'graph-node', response.data.lower())
         self.assertIn(b'metadata-hidden', response.data.lower())
+
+    def test_graph_page_includes_download_control(self):
+        response = self.client.get('/graph')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'id="download-graph"', response.data)
+        self.assertIn(b'id="download-graph-png"', response.data)
+        self.assertIn(b'const graphDownloadName =', response.data)
+        self.assertIn(b'const safeGraphDownloadName = graphDownloadName.trim()', response.data)
+        self.assertIn(b'link.download = safeGraphDownloadName + \'.svg\'', response.data)
+        self.assertIn(b'link.download = safeGraphDownloadName + \'.png\'', response.data)
+        self.assertIn(b'graphContent.getBBox()', response.data)
+        self.assertIn(b'graphCopy.setAttribute(\'viewBox\'', response.data)
+
+    def test_graph_memory_nodes_use_compact_spacing(self):
+        nodes, _ = _build_graph_data()
+        memory_nodes = [node for node in nodes if node['group'] == 'memory']
+        if len(memory_nodes) > 1:
+            y_positions = sorted(node['y'] for node in memory_nodes)
+            self.assertEqual(y_positions[1] - y_positions[0], 110)
 
     def test_cho_id_and_name_are_shown_in_tag_controls_and_graph(self):
         cho_id = f'CHO-LABEL-{uuid.uuid4().hex}'

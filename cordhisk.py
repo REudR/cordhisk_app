@@ -371,6 +371,14 @@ def _memory_map_markers():
   return markers
 
 
+def _graph_download_name(selected_memory, selected_cho_details):
+  if selected_cho_details:
+    return selected_cho_details.get("title") or selected_cho_details.get("label") or "cho-graph"
+  if selected_memory is not None:
+    return selected_memory.title or selected_memory.custom_id or f"memory-{selected_memory.id}"
+  return "cordhisk-graph"
+
+
 def _build_metadata_cache(memories):
   return {memory.id: extract_metadata(memory.text or "") for memory in memories}
 
@@ -497,7 +505,7 @@ def _build_graph_data(selected_memory_id=None, focus_cho=None):
       memory.title or f"Memory {memory.id}",
       "memory",
       180,
-      140 + index * 180,
+      140 + index * 110,
       memory_link,
       36,
       "",
@@ -883,6 +891,7 @@ def create_app(testing=False):
       focus_cho=focus_cho,
       filter_cho=filter_cho,
       memory_coordinates=_memory_coordinate_values(selected_memory),
+      graph_download_name=_graph_download_name(selected_memory, selected_cho_details),
       focus_memory=f"memory:{memory_id}" if memory_id else "",
       selected_cho_details=selected_cho_details,
       notice_level=notice_level,
@@ -1284,6 +1293,7 @@ def create_app(testing=False):
       focus_cho=focus_cho,
       filter_cho=filter_cho,
       memory_coordinates=_memory_coordinate_values(selected_memory),
+      graph_download_name=_graph_download_name(selected_memory, selected_cho_details),
       focus_memory=f"memory:{memory_id}" if memory_id else "",
       selected_cho_details=selected_cho_details,
       notice_level=request.args.get("notice_level", "").strip() or "success",

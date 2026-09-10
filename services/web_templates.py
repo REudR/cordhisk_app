@@ -368,6 +368,8 @@ HTML_TEMPLATE = """
               <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
               <button type="button" id="zoom-out" aria-label="Zoom out">-</button>
               <button type="button" id="reset-view">Reset</button>
+              <button type="button" id="download-graph">Download SVG</button>
+              <button type="button" id="download-graph-png">Download PNG</button>
               <div id="graph-hover-value" class="graph-hover-value">Hover CHO or metadata nodes to inspect values.</div>
             </div>
             <div class="graph-shell">
@@ -528,6 +530,10 @@ HTML_TEMPLATE = """
         const zoomInButton = document.getElementById('zoom-in');
         const zoomOutButton = document.getElementById('zoom-out');
         const resetButton = document.getElementById('reset-view');
+        const downloadGraphButton = document.getElementById('download-graph');
+        const downloadGraphPngButton = document.getElementById('download-graph-png');
+        const graphDownloadName = {{ graph_download_name | tojson }};
+        const safeGraphDownloadName = graphDownloadName.trim().replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^[.]+|[.]+$/g, '') || 'cordhisk-graph';
         const addMemoryTagButton = document.getElementById('open-add-memory-tag');
         const addMemoryTagBox = document.getElementById('add-memory-tag-box');
         const newMemoryMetadataField = document.getElementById('new-memory-metadata-field');
@@ -664,6 +670,71 @@ HTML_TEMPLATE = """
         if (source && target && preview) {
           source.addEventListener('mouseup', function () { setTimeout(captureSelection, 0); });
           source.addEventListener('scroll', saveTextScrollState, { passive: true });
+        }
+
+        if (downloadGraphButton && svg) {
+          const serializeGraph = function () {
+            const graphCopy = svg.cloneNode(true);
+            graphCopy.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            graphCopy.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+            const bounds = graphContent.getBBox();
+            const padding = 40;
+            const exportX = bounds.x - padding;
+            const exportY = bounds.y - padding;
+            const exportWidth = Math.max(1, bounds.width + padding * 2);
+            const exportHeight = Math.max(1, bounds.height + padding * 2);
+            graphCopy.setAttribute('viewBox', `${exportX} ${exportY} ${exportWidth} ${exportHeight}`);
+            graphCopy.setAttribute('width', String(Math.ceil(exportWidth)));
+            graphCopy.setAttribute('height', String(Math.ceil(exportHeight)));
+            const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+            style.textContent = '.node { stroke: #334155; stroke-width: 1.5; } .memory { fill: #d8ebf7; } .cho { fill: #e69f00; } .memory_metadata { fill: #d8ebf7; } .cho_metadata { fill: #d8f1e6; } .label { font-family: sans-serif; font-size: 12px; fill: #0f172a; } .focused { stroke: black; stroke-width: 2; } line { stroke: #94a3b8; stroke-width: 2; }';
+            graphCopy.insertBefore(style, graphCopy.firstChild);
+            return {
+              serialized: new XMLSerializer().serializeToString(graphCopy),
+              width: Math.ceil(exportWidth),
+              height: Math.ceil(exportHeight),
+            };
+          };
+
+          downloadGraphButton.addEventListener('click', function () {
+            const graph = serializeGraph();
+            const blob = new Blob([graph.serialized], { type: 'image/svg+xml;charset=utf-8' });
+            const downloadUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = safeGraphDownloadName + '.svg';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(downloadUrl);
+          });
+
+          if (downloadGraphPngButton) {
+            downloadGraphPngButton.addEventListener('click', function () {
+              const graph = serializeGraph();
+              const svgBlob = new Blob([graph.serialized], { type: 'image/svg+xml;charset=utf-8' });
+              const svgUrl = URL.createObjectURL(svgBlob);
+              const image = new Image();
+              image.onload = function () {
+                const scale = 2;
+                const canvas = document.createElement('canvas');
+                canvas.width = graph.width * scale;
+                canvas.height = graph.height * scale;
+                const context = canvas.getContext('2d');
+                context.fillStyle = '#ffffff';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                URL.revokeObjectURL(svgUrl);
+                const link = document.createElement('a');
+                link.href = canvas.toDataURL('image/png');
+                link.download = safeGraphDownloadName + '.png';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+              };
+              image.src = svgUrl;
+            });
+          }
         }
 
         document.querySelectorAll('.cho-tag-link[data-cho-tag-index]').forEach(function (tag) {
